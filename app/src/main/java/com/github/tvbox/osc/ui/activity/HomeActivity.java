@@ -53,6 +53,7 @@ import com.github.tvbox.osc.ui.adapter.SortAdapter;
 import com.github.tvbox.osc.ui.dialog.SelectDialog;
 import com.github.tvbox.osc.ui.dialog.TipDialog;
 import com.github.tvbox.osc.ui.fragment.GridFragment;
+import com.github.tvbox.osc.ui.fragment.LiveFragment;  // 显式导入，确保能直接使用
 import com.github.tvbox.osc.ui.fragment.UserFragment;
 import com.github.tvbox.osc.ui.tv.widget.DefaultTransformer;
 import com.github.tvbox.osc.ui.tv.widget.FixedSpeedScroller;
@@ -120,7 +121,7 @@ public class HomeActivity extends BaseActivity {
         public void run() {
             Date date = new Date();
             @SuppressLint("SimpleDateFormat")
-			//修改时间分隔符
+            //修改时间分隔符
             SimpleDateFormat timeFormat = new SimpleDateFormat(getString(R.string.hm_date1) + " | " + getString(R.string.hm_date2));
             tvDate.setText(timeFormat.format(date));
             mHandler.postDelayed(this, 1000);
@@ -361,8 +362,8 @@ public class HomeActivity extends BaseActivity {
             }
         });
         setLoadSir(this.contentLayout);
-        //mHandler.postDelayed(mFindFocus, 250);
     }
+
     //站点切换
     public static void homeRecf() {
         int homeRec = Hawk.get(HawkConfig.HOME_REC, -1);
@@ -383,6 +384,7 @@ public class HomeActivity extends BaseActivity {
     }
 
     private boolean skipNextUpdate = false;	
+
     private void initViewModel() {
         sourceViewModel = new ViewModelProvider(this).get(SourceViewModel.class);
         sourceViewModel.sortResult.observe(this, new Observer<AbsSortXml>() {
@@ -399,14 +401,46 @@ public class HomeActivity extends BaseActivity {
                     sortAdapter.setNewData(DefaultConfig.adjustSort(ApiConfig.get().getHomeSourceBean().getKey(), new ArrayList<>(), true));
                 }
                 initViewPager(absXml);
+
+                // DIYP风格：数据加载完成后，强制跳转到直播页面
+                int liveIndex = findLiveIndex();
+                if (liveIndex >= 0 && liveIndex < fragments.size()) {
+                    mViewPager.setCurrentItem(liveIndex, false);
+                    mGridView.setSelection(liveIndex);
+                    currentSelected = liveIndex;
+                    sortFocused = liveIndex;
+                    // 隐藏顶部栏，更接近 DIYP 极简风格（可注释掉测试）
+                    changeTop(true);
+                }
+                
                 // takagen99 : Switch to show / hide source title
                 SourceBean home = ApiConfig.get().getHomeSourceBean();
                 if (HomeShow) {
                     if (home != null && home.getName() != null && !home.getName().isEmpty()) tvName.setText(home.getName());
-                        tvName.clearAnimation();
+                    tvName.clearAnimation();
                 }
             }
         });
+    }
+
+    // 新增：查找直播分类的索引（根据常见 id 或 name 匹配）
+    private int findLiveIndex() {
+        for (int i = 0; i < sortAdapter.getData().size(); i++) {
+            MovieSort.SortData data = sortAdapter.getItem(i);
+            if (data != null) {
+                String id = data.id != null ? data.id.toLowerCase() : "";
+                String name = data.name != null ? data.name.toLowerCase() : "";
+                if (id.contains("live") || 
+                    name.contains("直播") || 
+                    name.contains("live") || 
+                    name.contains("电视") || 
+                    name.contains("频道")) {
+                    return i;
+                }
+            }
+        }
+        // 如果没匹配到，默认尝试第 1 个索引（很多源直播在第二个分类）
+        return 1;
     }
 
     private boolean dataInitOk = false;
@@ -415,7 +449,7 @@ public class HomeActivity extends BaseActivity {
     // takagen99 : Switch to show / hide source title
     boolean HomeShow = Hawk.get(HawkConfig.HOME_SHOW_SOURCE, false);
 
-    // takagen99 : Check if network is available
+    // takagen99: Check if network is available
     boolean isNetworkAvailable() {
         ConnectivityManager cm
                 = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
@@ -761,11 +795,6 @@ public class HomeActivity extends BaseActivity {
             if (event.getKeyCode() == KeyEvent.KEYCODE_MENU) {
                 showSiteSwitch();
             }
-//            if (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_DOWN) {
-//                if () {
-//
-//                }
-//            }
         } else if (event.getAction() == KeyEvent.ACTION_UP) {
 
         }
@@ -893,14 +922,6 @@ public class HomeActivity extends BaseActivity {
             dialog.setOnDismissListener(new DialogInterface.OnDismissListener() {
                 @Override
                 public void onDismiss(DialogInterface dialog) {
-//                    if (homeSourceKey != null && !homeSourceKey.equals(Hawk.get(HawkConfig.HOME_API, ""))) {
-//                        Intent intent = new Intent(getApplicationContext(), HomeActivity.class);
-//                        intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK);
-//                        Bundle bundle = new Bundle();
-//                        bundle.putBoolean("useCache", true);
-//                        intent.putExtras(bundle);
-//                        HomeActivity.this.startActivity(intent);
-//                    }
                 }
             });
             dialog.show();
@@ -933,13 +954,4 @@ public class HomeActivity extends BaseActivity {
         blinkAnimation.setRepeatCount(Animation.INFINITE);
         tvName.startAnimation(blinkAnimation);
     }
-//    public void onClick(View v) {
-//        FastClickCheckUtil.check(v);
-//        if (v.getId() == R.id.tvFind) {
-//            jumpActivity(SearchActivity.class);
-//        } else if (v.getId() == R.id.tvMenu) {
-//            jumpActivity(SettingActivity.class);
-//        }
-//    }
-
 }
