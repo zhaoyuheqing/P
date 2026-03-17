@@ -1,13 +1,7 @@
 name: Build TVBox APK
 
 on:
-  workflow_dispatch:          # 手动触发（网页上点 Run workflow）
-  # push:                     # 如需 push main 自动构建，取消注释
-  #   branches:
-  #     - main
-  # pull_request:
-  #   branches:
-  #     - main
+  workflow_dispatch:
 
 jobs:
   build:
@@ -17,49 +11,47 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0        # 保留完整历史（部分项目需要）
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
-          distribution: 'temurin'   # Adoptium/Temurin 稳定
+          distribution: 'temurin'
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Clean project (recommended)
+      - name: Clean project
         run: ./gradlew clean
 
-      # 构建 debug 版（更快、更容易安装测试）
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace --info
 
-      # 构建 release unsigned 版（大多数 TVBox 用户直接用这个）
       - name: Build Release Unsigned APK
         run: ./gradlew assembleRelease --stacktrace --info --build-cache --parallel
 
-      # 上传 Debug APK
-      - name: Upload Debug APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tvbox-debug
-          path: app/build/outputs/apk/debug/*.apk
-          retention-days: 7
-          if-no-files-found: warn
-
-      # 上传 Release Unsigned APK
-      - name: Upload Release APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tvbox-release-unsigned
-          path: app/build/outputs/apk/release/*.apk
-          retention-days: 7
-          if-no-files-found: warn
-
-      # 可选：如果构建成功，列出输出文件方便 debug
-      - name: List built APKs
+      # 列出所有生成的 APK 路径（debug 用，方便看日志）
+      - name: List all generated APKs
         if: always()
         run: |
-          ls -la app/build/outputs/apk/ || true
-          find app/build/outputs -name "*.apk" || true
+          echo "Listing APKs:"
+          find app/build/outputs/apk -name "*.apk" || true
+          ls -laR app/build/outputs/apk || true
+
+      # 上传所有找到的 APK（递归通配）
+      - name: Upload All Debug APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: tvbox-debug-apks
+          path: app/build/outputs/apk/**/*.apk   # ** 递归所有子目录
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Upload All Release APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: tvbox-release-apks
+          path: app/build/outputs/apk/**/*.apk
+          retention-days: 7
+          if-no-files-found: warn
