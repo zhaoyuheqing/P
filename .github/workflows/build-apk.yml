@@ -1,4 +1,4 @@
-name: Build TVBox APK - Single Variant (arm64 generic normal release)
+name: Build TVBox APK - Single Debug Variant (arm64 generic normal debug)
 
 on:
   workflow_dispatch:
@@ -25,11 +25,11 @@ jobs:
       - name: Clean previous builds
         run: ./gradlew clean
 
-      # 只构建一个指定的变体：arm64 + generic + normal + release
-      - name: Assemble single release variant
-        run: ./gradlew assembleArm64GenericNormalRelease --stacktrace --info --build-cache --parallel
+      # 只构建 debug 版：arm64 + generic + normal + debug
+      - name: Assemble single debug variant
+        run: ./gradlew assembleArm64GenericNormalDebug --stacktrace --info --build-cache --parallel
 
-      # 打印所有生成的 APK 文件路径（强烈推荐，用于确认实际位置）
+      # 打印所有生成的 APK 文件路径（用于确认位置）
       - name: Print all generated APK locations
         if: always()
         run: |
@@ -42,26 +42,12 @@ jobs:
           ls -laR app/build/outputs/apk 2>/dev/null || echo "目录不存在或为空"
           echo "======================================"
 
-      # 递归查找并上传 release APK（最稳妥的方式）
-      - name: Upload release APK (recursive search)
+      # 使用递归查找上传 debug APK（最稳妥，不会因为目录结构变化而失败）
+      - name: Upload debug APK (recursive search)
         uses: actions/upload-artifact@v4
         with:
-          name: TVBox-release-arm64-generic-normal
-          path: |
-            app/build/outputs/**/*.apk
+          name: TVBox-debug-arm64-generic-normal
+          path: app/build/outputs/**/*.apk
           if-no-files-found: warn
           retention-days: 7
           compression-level: 6
-
-      # 如果你也想要 debug 版，可以取消下面注释
-      # - name: Assemble single debug variant
-      #   run: ./gradlew assembleArm64GenericNormalDebug --stacktrace --info --build-cache --parallel
-
-      # - name: Upload debug APK (recursive)
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: TVBox-debug-arm64-generic-normal
-      #     path: |
-      #       app/build/outputs/**/*.apk
-      #     if-no-files-found: warn
-      #     retention-days: 7
