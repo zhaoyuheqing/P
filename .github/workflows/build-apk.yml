@@ -1,4 +1,4 @@
-name: Build TVBox APK (arm64 Generic Normal only)
+name: Build TVBox APK - Single Variant (arm64 generic normal release)
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -19,42 +19,49 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Grant execute permission for gradlew
+      - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Clean project
+      - name: Clean previous builds
         run: ./gradlew clean
 
-      # 只构建 arm64 + generic + normal 的 debug 版
-      - name: Build Debug APK (arm64GenericNormal)
-        run: ./gradlew assembleArm64GenericNormalDebug --stacktrace --info
-
-      # 只构建 arm64 + generic + normal 的 release 版 (unsigned)
-      - name: Build Release APK (arm64GenericNormal)
+      # 只构建一个指定的变体：arm64 + generic + normal + release
+      - name: Assemble single release variant
         run: ./gradlew assembleArm64GenericNormalRelease --stacktrace --info --build-cache --parallel
 
-      # 列出生成的 APK（调试用）
-      - name: List generated APKs
+      # 打印所有生成的 APK 文件路径（强烈推荐，用于确认实际位置）
+      - name: Print all generated APK locations
         if: always()
         run: |
-          echo "Listing all APKs:"
-          find app/build/outputs/apk -name "*.apk" -print || true
-          ls -laR app/build/outputs/apk || true
+          echo "======================================"
+          echo "寻找所有 .apk 文件（完整路径）："
+          find app/build/outputs -type f -name "*.apk" 2>/dev/null || echo "未找到任何 .apk 文件"
+          echo ""
+          echo "======================================"
+          echo "outputs/apk 目录结构："
+          ls -laR app/build/outputs/apk 2>/dev/null || echo "目录不存在或为空"
+          echo "======================================"
 
-      # 上传 debug 版
-      - name: Upload Debug APK
+      # 递归查找并上传 release APK（最稳妥的方式）
+      - name: Upload release APK (recursive search)
         uses: actions/upload-artifact@v4
         with:
-          name: tvbox-debug-arm64-generic-normal
-          path: app/build/outputs/apk/arm64/generic/normal/debug/*.apk
+          name: TVBox-release-arm64-generic-normal
+          path: |
+            app/build/outputs/**/*.apk
+          if-no-files-found: warn
           retention-days: 7
-          if-no-files-found: error  # 如果没找到就报错提醒
+          compression-level: 6
 
-      # 上传 release 版
-      - name: Upload Release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: tvbox-release-arm64-generic-normal
-          path: app/build/outputs/apk/arm64/generic/normal/release/*.apk
-          retention-days: 7
-          if-no-files-found: error
+      # 如果你也想要 debug 版，可以取消下面注释
+      # - name: Assemble single debug variant
+      #   run: ./gradlew assembleArm64GenericNormalDebug --stacktrace --info --build-cache --parallel
+
+      # - name: Upload debug APK (recursive)
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: TVBox-debug-arm64-generic-normal
+      #     path: |
+      #       app/build/outputs/**/*.apk
+      #     if-no-files-found: warn
+      #     retention-days: 7
