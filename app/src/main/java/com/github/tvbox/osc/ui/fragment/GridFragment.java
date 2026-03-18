@@ -1,4 +1,5 @@
 package com.github.tvbox.osc.ui.fragment;
+
 import android.content.res.TypedArray;
 import android.content.Context;
 import android.os.Bundle;
@@ -135,7 +136,6 @@ public class GridFragment extends BaseLazyFragment {
 
     // 是否允许聚合搜索 sortData.flag的第二个字符为‘1’时允许聚搜
     public boolean enableFastSearch() {  return sortData.flag == null || sortData.flag.length() < 2 || (sortData.flag.charAt(1) == '1'); }
-    //public boolean enableFastSearch() {  return (sortData.flag == null || sortData.flag.length() < 2) ? true : (sortData.flag.charAt(1) == '1'); }
 
     // 保存当前页面
     private void saveCurrentView() {
@@ -165,13 +165,13 @@ public class GridFragment extends BaseLazyFragment {
         this.isLoad = info.isLoad;
         this.focusedView = info.focusedView;
         this.mGridView.setVisibility(View.VISIBLE);
-//        if(this.focusedView != null){ this.focusedView.requestFocus(); }
         if (mGridView != null) mGridView.requestFocus();
         return true;
     }
 
     private ImgUtil.Style style;
-    // 更改当前页面
+
+    // 更改当前页面（核心修改：加判空保护 ImgUtil.initStyle()）
     private void createView() {
         this.saveCurrentView(); // 保存当前页面
         if (mGridView == null) { // 从layout中拿view
@@ -188,7 +188,14 @@ public class GridFragment extends BaseLazyFragment {
             mGridView.setVisibility(View.VISIBLE);
         }
         mGridView.setHasFixedSize(true);
-        style=ImgUtil.initStyle();
+
+        // 修改处1：加判空保护（防止源未加载时的 NPE）
+        style = null;
+        if (ApiConfig.get().getHomeSourceBean() != null) {
+            style = ImgUtil.initStyle();
+        }
+        // style 为 null 时，GridAdapter 会用默认样式
+
         gridAdapter = new GridAdapter(isFolederMode(), style);
         this.page = 1;
         this.maxPage = 1;
@@ -293,6 +300,15 @@ public class GridFragment extends BaseLazyFragment {
         });
         gridAdapter.setLoadMoreView(new LoadMoreView());
         setLoadSir(mGridView);
+
+        // 修改处2：添加空数据提示（用户友好）
+        TextView emptyTv = new TextView(mContext);
+        emptyTv.setText("暂无频道，请按菜单键进入设置添加订阅源");
+        emptyTv.setTextColor(0xFFFFFFFF);
+        emptyTv.setTextSize(18);
+        emptyTv.setGravity(android.view.Gravity.CENTER);
+        emptyTv.setPadding(0, 200, 0, 0);
+        gridAdapter.setEmptyView(emptyTv);
     }
 
     private void initViewModel() {
@@ -303,7 +319,6 @@ public class GridFragment extends BaseLazyFragment {
         sourceViewModel.listResult.observe(this, new Observer<AbsXml>() {
             @Override
             public void onChanged(AbsXml absXml) {
-//                if(mGridView != null) mGridView.requestFocus();
                 if (absXml != null && absXml.movie != null && absXml.movie.videoList != null && absXml.movie.videoList.size() > 0) {
                     if (page == 1) {
                         showSuccess();
@@ -342,8 +357,9 @@ public class GridFragment extends BaseLazyFragment {
     }
 
     private void initData() {
-    	if (ApiConfig.get().getHomeSourceBean().getApi()==null) {
-            showEmpty();
+        // 修改处3：加判空保护（防止无源时崩溃）
+        if (ApiConfig.get().getHomeSourceBean() == null || ApiConfig.get().getHomeSourceBean().getApi() == null) {
+            showEmpty();  // 显示空提示
             return;
         }
         showLoading();
@@ -354,7 +370,8 @@ public class GridFragment extends BaseLazyFragment {
     }
 
     private void toggleFilterStatus() {
-        if (sortData!=null && sortData.filters != null && !sortData.filters.isEmpty()) {
+        // 修改处4：加判空（防止 sortData.filters null）
+        if (sortData != null && sortData.filters != null && !sortData.filters.isEmpty()) {
             int count = sortData.filterSelectCount();
             EventBus.getDefault().post(new RefreshEvent(RefreshEvent.TYPE_FILTER_CHANGE, count));
         }
@@ -370,16 +387,8 @@ public class GridFragment extends BaseLazyFragment {
     }
 
     public void showFilter() {
-    	if (sortData!=null && !sortData.filters.isEmpty() && gridFilterDialog == null) {
+        if (sortData != null && !sortData.filters.isEmpty() && gridFilterDialog == null) {
             gridFilterDialog = new GridFilterDialog(mContext);
-//            gridFilterDialog.setData(sortData);
-//            gridFilterDialog.setOnDismiss(new GridFilterDialog.Callback() {
-//                @Override
-//                public void change() {
-//                    page = 1;
-//                    initData();
-//                }
-//            });
             setFilterDialogData();
         }
         if (gridFilterDialog != null)
