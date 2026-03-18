@@ -282,6 +282,9 @@ public class GridFragment extends BaseLazyFragment {
             }
         }
 
+        // 默认禁用加载更多，无源时防止 null 请求
+        gridAdapter.setEnableLoadMore(false);
+
         gridAdapter.setOnLoadMoreListener(new BaseQuickAdapter.RequestLoadMoreListener() {
             @Override
             public void onLoadMoreRequested() {
@@ -303,7 +306,6 @@ public class GridFragment extends BaseLazyFragment {
 
             @Override
             public void onItemClick(TvRecyclerView parent, View itemView, int position) {
-                // 空实现，由 Adapter 处理
             }
         });
 
@@ -384,18 +386,21 @@ public class GridFragment extends BaseLazyFragment {
         if (ApiConfig.get().getHomeSourceBean() == null || ApiConfig.get().getHomeSourceBean().getApi() == null) {
             showEmpty();
 
-            // 临时测试频道（用于验证触控是否恢复）
+            // 临时测试频道（验证触控）
             ArrayList<Movie.Video> fakeList = new ArrayList<>();
             Movie.Video fake = new Movie.Video();
             fake.name = "测试直播频道（点击我跳转详情）";
             fake.id = "test_id";
             fake.sourceKey = "test_source";
-            fake.pic = ""; // 可选，空图片
+            fake.pic = "";
             fakeList.add(fake);
 
             gridAdapter.setNewData(fakeList);
             showSuccess();
             isLoad = true;
+
+            // 关键：无源禁用加载更多，避免 null 请求闪退
+            gridAdapter.setEnableLoadMore(false);
             return;
         }
 
