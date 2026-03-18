@@ -52,7 +52,7 @@ import java.util.Stack;
 /**
  * @author pj567
  * @date :2020/12/21
- * @description: GridFragment，支持内置源
+ * @description:
  */
 public class GridFragment extends BaseLazyFragment {
     private MovieSort.SortData sortData = null;
@@ -91,7 +91,7 @@ public class GridFragment extends BaseLazyFragment {
     protected int getLayoutResID() {
         return R.layout.fragment_grid;
     }
-
+    
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -106,18 +106,18 @@ public class GridFragment extends BaseLazyFragment {
         initViewModel();
         initData();
     }
-
+    
     @Override
     public void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
-        outState.putString("sortDataJson", GsonUtils.toJson(sortData));
+        outState.putString("sortDataJson", GsonUtils.toJson(sortData));        
     }
 
-    private void changeView(String id, Boolean isFolder){
+    private void changeView(String id,Boolean isFolder){
         if(isFolder){
-            this.sortData.flag = style==null?"1":"2";
-        } else {
-            this.sortData.flag = "2";
+            this.sortData.flag =style==null?"1":"2";
+        }else {
+            this.sortData.flag ="2";
         }
         initView();
         this.sortData.id = id;
@@ -133,8 +133,8 @@ public class GridFragment extends BaseLazyFragment {
         return (sortData == null || sortData.flag == null || sortData.flag.length() == 0) ? '0' : sortData.flag.charAt(0);
     }
 
-    public boolean enableFastSearch() {
-        return sortData.flag == null || sortData.flag.length() < 2 || (sortData.flag.charAt(1) == '1');
+    public boolean enableFastSearch() {  
+        return sortData.flag == null || sortData.flag.length() < 2 || (sortData.flag.charAt(1) == '1'); 
     }
 
     private void saveCurrentView() {
@@ -179,46 +179,52 @@ public class GridFragment extends BaseLazyFragment {
     }
 
     private void rebindClickListeners() {
-        gridAdapter.setOnItemClickListener((adapter, view, position) -> {
-            FastClickCheckUtil.check(view);
-            Movie.Video video = gridAdapter.getData().get(position);
-            if (video != null) {
-                Bundle bundle = new Bundle();
-                bundle.putString("id", video.id);
-                bundle.putString("sourceKey", video.sourceKey);
-                bundle.putString("title", video.name);
-                if(video.tag !=null && (video.tag.equals("folder") || video.tag.equals("cover"))){
-                    focusedView = view;
-                    if(("12".indexOf(getUITag()) != -1)){
-                        changeView(video.id,video.tag.equals("folder"));
-                    } else {
-                        changeView(video.id,false);
-                    }
-                } else {
-                    if (video.id == null || video.id.isEmpty() || video.id.startsWith("msearch:")) {
-                        if(Hawk.get(HawkConfig.FAST_SEARCH_MODE, false) && enableFastSearch()){
-                            jumpActivity(FastSearchActivity.class, bundle);
-                        } else {
-                            jumpActivity(SearchActivity.class, bundle);
+        gridAdapter.setOnItemClickListener(new BaseQuickAdapter.OnItemClickListener() {
+            @Override
+            public void onItemClick(BaseQuickAdapter adapter, View view, int position) {
+                FastClickCheckUtil.check(view);
+                Movie.Video video = gridAdapter.getData().get(position);
+                if (video != null) {
+                    Bundle bundle = new Bundle();
+                    bundle.putString("id", video.id);
+                    bundle.putString("sourceKey", video.sourceKey);
+                    bundle.putString("title", video.name);
+                    if( video.tag !=null && (video.tag.equals("folder") || video.tag.equals("cover"))){
+                        focusedView = view;
+                        if(("12".indexOf(getUITag()) != -1)){
+                            changeView(video.id,video.tag.equals("folder"));
+                        }else {
+                            changeView(video.id,false);
                         }
                     } else {
-                        jumpActivity(DetailActivity.class, bundle);
+                        if (video.id == null || video.id.isEmpty() || video.id.startsWith("msearch:")) {
+                            if(Hawk.get(HawkConfig.FAST_SEARCH_MODE, false) && enableFastSearch()){
+                                jumpActivity(FastSearchActivity.class, bundle);
+                            }else {
+                                jumpActivity(SearchActivity.class, bundle);
+                            }
+                        } else {
+                            jumpActivity(DetailActivity.class, bundle);
+                        }
                     }
                 }
             }
         });
 
-        gridAdapter.setOnItemLongClickListener((adapter, view, position) -> {
-            FastClickCheckUtil.check(view);
-            Movie.Video video = gridAdapter.getData().get(position);
-            if (video != null) {
-                Bundle bundle = new Bundle();
-                bundle.putString("id", video.id);
-                bundle.putString("sourceKey", video.sourceKey);
-                bundle.putString("title", video.name);
-                jumpActivity(FastSearchActivity.class, bundle);
+        gridAdapter.setOnItemLongClickListener(new BaseQuickAdapter.OnItemLongClickListener() {
+            @Override
+            public boolean onItemLongClick(BaseQuickAdapter adapter, View view, int position) {
+                FastClickCheckUtil.check(view);
+                Movie.Video video = gridAdapter.getData().get(position);
+                if (video != null) {
+                    Bundle bundle = new Bundle();
+                    bundle.putString("id", video.id);
+                    bundle.putString("sourceKey", video.sourceKey);
+                    bundle.putString("title", video.name);
+                    jumpActivity(FastSearchActivity.class, bundle);
+                }
+                return true;
             }
-            return true;
         });
     }
 
@@ -247,6 +253,7 @@ public class GridFragment extends BaseLazyFragment {
         mGridView.setHasFixedSize(true);
 
         style = null;
+
         gridAdapter = new GridAdapter(isFolederMode(), style);
         this.page = 1;
         this.maxPage = 1;
@@ -256,6 +263,7 @@ public class GridFragment extends BaseLazyFragment {
     private void initView() {
         this.createView();
         mGridView.setAdapter(gridAdapter);
+
         mGridView.setFocusable(true);
         mGridView.setFocusableInTouchMode(true);
         mGridView.setClickable(true);
@@ -274,9 +282,12 @@ public class GridFragment extends BaseLazyFragment {
             }
         }
 
-        gridAdapter.setOnLoadMoreListener(() -> {
-            gridAdapter.setEnableLoadMore(true);
-            sourceViewModel.getList(sortData, page);
+        gridAdapter.setOnLoadMoreListener(new BaseQuickAdapter.RequestLoadMoreListener() {
+            @Override
+            public void onLoadMoreRequested() {
+                gridAdapter.setEnableLoadMore(true);
+                sourceViewModel.getList(sortData, page);
+            }
         }, mGridView);
 
         mGridView.setOnItemListener(new TvRecyclerView.OnItemListener() {
@@ -292,12 +303,21 @@ public class GridFragment extends BaseLazyFragment {
 
             @Override
             public void onItemClick(TvRecyclerView parent, View itemView, int position) {
+                // 空实现，由 Adapter 处理
             }
         });
 
-        mGridView.setOnInBorderKeyEventListener((direction, focused) -> false);
+        mGridView.setOnInBorderKeyEventListener(new TvRecyclerView.OnInBorderKeyEventListener() {
+            @Override
+            public boolean onInBorderKeyEvent(int direction, View focused) {
+                if (direction == View.FOCUS_UP) {
+                }
+                return false;
+            }
+        });
 
         rebindClickListeners();
+
         gridAdapter.setLoadMoreView(new LoadMoreView());
         setLoadSir(mGridView);
 
@@ -309,40 +329,50 @@ public class GridFragment extends BaseLazyFragment {
         emptyTv.setPadding(0, 300, 0, 0);
         emptyTv.setClickable(true);
         emptyTv.setFocusable(true);
-        emptyTv.setOnClickListener(v -> Toast.makeText(mContext, "请按菜单键进入设置添加源", Toast.LENGTH_SHORT).show());
+        emptyTv.setFocusableInTouchMode(true);
+        emptyTv.setOnClickListener(v -> {
+            Toast.makeText(mContext, "请按菜单键进入设置添加源", Toast.LENGTH_SHORT).show();
+        });
         gridAdapter.setEmptyView(emptyTv);
     }
 
     private void initViewModel() {
-        if (sourceViewModel != null) return;
+        if (sourceViewModel != null) {
+            return;
+        }
         sourceViewModel = new ViewModelProvider(this).get(SourceViewModel.class);
-        sourceViewModel.listResult.observe(this, absXml -> {
-            if (absXml != null && absXml.movie != null && absXml.movie.videoList != null && !absXml.movie.videoList.isEmpty()) {
-                if (page == 1) {
-                    showSuccess();
-                    isLoad = true;
-                    gridAdapter.setNewData(absXml.movie.videoList);
+        sourceViewModel.listResult.observe(this, new Observer<AbsXml>() {
+            @Override
+            public void onChanged(AbsXml absXml) {
+                if (absXml != null && absXml.movie != null && absXml.movie.videoList != null && absXml.movie.videoList.size() > 0) {
+                    if (page == 1) {
+                        showSuccess();
+                        isLoad = true;
+                        gridAdapter.setNewData(absXml.movie.videoList);
+                    } else {
+                        gridAdapter.addData(absXml.movie.videoList);
+                    }
+                    page++;
+                    maxPage = absXml.movie.pagecount;
+                    if (page > maxPage && maxPage!=0) {
+                        gridAdapter.loadMoreEnd();
+                        gridAdapter.setEnableLoadMore(false);
+                    } else {
+                        gridAdapter.loadMoreComplete();
+                        gridAdapter.setEnableLoadMore(true);
+                    }
                 } else {
-                    gridAdapter.addData(absXml.movie.videoList);
-                }
-                page++;
-                maxPage = absXml.movie.pagecount;
-                if (page > maxPage && maxPage != 0) {
-                    gridAdapter.loadMoreEnd();
+                    if (page == 1) {
+                        showEmpty();
+                    }
+                    if (page > maxPage && maxPage!=0) {
+                        Toast.makeText(getContext(), "没有更多了", Toast.LENGTH_SHORT).show();
+                        gridAdapter.loadMoreEnd();
+                    } else {
+                        gridAdapter.loadMoreComplete();
+                    }
                     gridAdapter.setEnableLoadMore(false);
-                } else {
-                    gridAdapter.loadMoreComplete();
-                    gridAdapter.setEnableLoadMore(true);
                 }
-            } else {
-                if (page == 1) showEmpty();
-                if (page > maxPage && maxPage != 0) {
-                    Toast.makeText(getContext(), "没有更多了", Toast.LENGTH_SHORT).show();
-                    gridAdapter.loadMoreEnd();
-                } else {
-                    gridAdapter.loadMoreComplete();
-                }
-                gridAdapter.setEnableLoadMore(false);
             }
         });
     }
@@ -352,39 +382,26 @@ public class GridFragment extends BaseLazyFragment {
     }
 
     private void initData() {
+        // 内置 TXT 直播源：https://frosty-block-011f.pohoy71288.workers.dev/
         if (ApiConfig.get().getHomeSourceBean() == null || ApiConfig.get().getHomeSourceBean().getApi() == null) {
-            // 内置源逻辑
+            SourceBean builtInSource = new SourceBean();
+            builtInSource.setKey("built_in_frosty_txt");
+            builtInSource.setName("内置 TXT 测试源 (frosty)");
+            builtInSource.setApi("https://frosty-block-011f.pohoy71288.workers.dev/");  // TXT 格式
+            builtInSource.setType("txt");  // 重要：指定为 txt 格式，让 TVBox 用 TXT 解析器
+
+            // 强制设置到 ApiConfig
+            ApiConfig.get().setHomeSourceBean(builtInSource);
+
+            // 立即加载频道列表
             showLoading();
             isLoad = false;
             scrollTop();
             toggleFilterStatus();
-
-            AbsXml absXml = new AbsXml();
-            absXml.movie = new Movie();
-            absXml.movie.videoList = new ArrayList<>();
-
-            Movie.Video video1 = new Movie.Video();
-            video1.id = "builtin_1";
-            video1.name = "内置频道1";
-            video1.sourceKey = "builtin_source";
-            absXml.movie.videoList.add(video1);
-
-            Movie.Video video2 = new Movie.Video();
-            video2.id = "builtin_2";
-            video2.name = "内置频道2";
-            video2.sourceKey = "builtin_source";
-            absXml.movie.videoList.add(video2);
-
-            showSuccess();
-            isLoad = true;
-            page = 1;
-            maxPage = 1;
-            gridAdapter.setNewData(absXml.movie.videoList);
-
+            sourceViewModel.getList(sortData, page);
             return;
         }
 
-        // 网络源逻辑
         showLoading();
         isLoad = false;
         scrollTop();
@@ -413,7 +430,8 @@ public class GridFragment extends BaseLazyFragment {
             gridFilterDialog = new GridFilterDialog(mContext);
             setFilterDialogData();
         }
-        if (gridFilterDialog != null) gridFilterDialog.show();
+        if (gridFilterDialog != null)
+            gridFilterDialog.show();
     }
 
     public void setFilterDialogData() {
