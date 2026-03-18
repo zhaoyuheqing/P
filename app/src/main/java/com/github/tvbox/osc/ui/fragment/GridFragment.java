@@ -115,12 +115,12 @@ public class GridFragment extends BaseLazyFragment {
 
     private void changeView(String id,Boolean isFolder){
         if(isFolder){
-            this.sortData.flag =style==null?"1":"2"; // 修改sortData.flag
+            this.sortData.flag =style==null?"1":"2";
         }else {
-            this.sortData.flag ="2"; // 修改sortData.flag
+            this.sortData.flag ="2";
         }
         initView();
-        this.sortData.id = id; // 修改sortData.id为新的ID
+        this.sortData.id = id;
         initViewModel();
         initData();
     }
@@ -129,15 +129,14 @@ public class GridFragment extends BaseLazyFragment {
         return (getUITag() == '1');
     }
 
-    // 获取当前页面UI的显示模式 ‘0’ 正常模式 '1' 文件夹模式 '2' 显示缩略图的文件夹模式
     public char getUITag() {
         return (sortData == null || sortData.flag == null || sortData.flag.length() == 0) ? '0' : sortData.flag.charAt(0);
     }
 
-    // 是否允许聚合搜索 sortData.flag的第二个字符为‘1’时允许聚搜
-    public boolean enableFastSearch() {  return sortData.flag == null || sortData.flag.length() < 2 || (sortData.flag.charAt(1) == '1'); }
+    public boolean enableFastSearch() {  
+        return sortData.flag == null || sortData.flag.length() < 2 || (sortData.flag.charAt(1) == '1'); 
+    }
 
-    // 保存当前页面
     private void saveCurrentView() {
         if (this.mGridView == null) return;
         GridInfo info = new GridInfo();
@@ -151,12 +150,11 @@ public class GridFragment extends BaseLazyFragment {
         this.mGrids.push(info);
     }
 
-    // 丢弃当前页面，将页面还原成上一个保存的页面
     public boolean restoreView() {
         if (mGrids.empty()) return false;
         this.showSuccess();
-        ((ViewGroup) mGridView.getParent()).removeView(this.mGridView); // 重父窗口移除当前控件
-        GridInfo info = mGrids.pop();// 还原上次保存的控件
+        ((ViewGroup) mGridView.getParent()).removeView(this.mGridView);
+        GridInfo info = mGrids.pop();
         this.sortData.id = info.sortID;
         this.mGridView = info.mGridView;
         this.gridAdapter = info.gridAdapter;
@@ -171,12 +169,11 @@ public class GridFragment extends BaseLazyFragment {
 
     private ImgUtil.Style style;
 
-    // 更改当前页面（彻底禁用 ImgUtil.initStyle()，纯直播壳不需要）
     private void createView() {
-        this.saveCurrentView(); // 保存当前页面
-        if (mGridView == null) { // 从layout中拿view
+        this.saveCurrentView();
+        if (mGridView == null) {
             mGridView = findViewById(R.id.mGridView);
-        } else { // 复制当前view
+        } else {
             TvRecyclerView v3 = new TvRecyclerView(this.mContext);
             v3.setSpacingWithMargins(10, 10);
             v3.setLayoutParams(mGridView.getLayoutParams());
@@ -186,12 +183,16 @@ public class GridFragment extends BaseLazyFragment {
             mGridView.setVisibility(View.GONE);
             mGridView = v3;
             mGridView.setVisibility(View.VISIBLE);
+
+            // 复制后必须重新绑定 Adapter 和点击事件（修复触控失效）
+            if (gridAdapter != null) {
+                mGridView.setAdapter(gridAdapter);
+            }
         }
         mGridView.setHasFixedSize(true);
 
-        // 彻底禁用风格初始化（纯直播壳不需要首页 style，避免任何 NPE）
-        // style = ImgUtil.initStyle();  // ← 已注释，不再调用
-        style = null;  // 强制 null，让 GridAdapter 使用默认样式
+        // 禁用风格初始化（纯直播壳不需要）
+        style = null;
 
         gridAdapter = new GridAdapter(isFolederMode(), style);
         this.page = 1;
@@ -202,6 +203,12 @@ public class GridFragment extends BaseLazyFragment {
     private void initView() {
         this.createView();
         mGridView.setAdapter(gridAdapter);
+
+        // 启用触控焦点（手机重要）
+        mGridView.setFocusable(true);
+        mGridView.setFocusableInTouchMode(true);
+        mGridView.setClickable(true);
+
         if (isFolederMode()) {
             mGridView.setLayoutManager(new V7LinearLayoutManager(this.mContext, 1, false));
         } else {
@@ -223,6 +230,8 @@ public class GridFragment extends BaseLazyFragment {
                 sourceViewModel.getList(sortData, page);
             }
         }, mGridView);
+
+        // 重新绑定焦点动画和点击（复制后丢失，需要重新设置）
         mGridView.setOnItemListener(new TvRecyclerView.OnItemListener() {
             @Override
             public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {
@@ -236,9 +245,10 @@ public class GridFragment extends BaseLazyFragment {
 
             @Override
             public void onItemClick(TvRecyclerView parent, View itemView, int position) {
-
+                // 空实现，实际点击由 Adapter 处理
             }
         });
+
         mGridView.setOnInBorderKeyEventListener(new TvRecyclerView.OnInBorderKeyEventListener() {
             @Override
             public boolean onInBorderKeyEvent(int direction, View focused) {
@@ -247,64 +257,71 @@ public class GridFragment extends BaseLazyFragment {
                 return false;
             }
         });
+
+        // 重新绑定 Adapter 的点击事件（确保手机触控有效）
         gridAdapter.setOnItemClickListener(new BaseQuickAdapter.OnItemClickListener() {
             @Override
             public void onItemClick(BaseQuickAdapter adapter, View view, int position) {
                 FastClickCheckUtil.check(view);
+                if (gridAdapter.getData().size() <= position) return;
                 Movie.Video video = gridAdapter.getData().get(position);
-                if (video != null) {
-                    Bundle bundle = new Bundle();
-                    bundle.putString("id", video.id);
-                    bundle.putString("sourceKey", video.sourceKey);
-                    bundle.putString("title", video.name);
-                    if( video.tag !=null && (video.tag.equals("folder") || video.tag.equals("cover"))){
-                        focusedView = view;
-                        if(("12".indexOf(getUITag()) != -1)){
-                            changeView(video.id,video.tag.equals("folder"));
-                        }else {
-                            changeView(video.id,false);
+                if (video == null) return;
+                Bundle bundle = new Bundle();
+                bundle.putString("id", video.id);
+                bundle.putString("sourceKey", video.sourceKey);
+                bundle.putString("title", video.name);
+                if (video.tag != null && (video.tag.equals("folder") || video.tag.equals("cover"))) {
+                    focusedView = view;
+                    if ("12".indexOf(getUITag()) != -1) {
+                        changeView(video.id, video.tag.equals("folder"));
+                    } else {
+                        changeView(video.id, false);
+                    }
+                } else {
+                    if (video.id == null || video.id.isEmpty() || video.id.startsWith("msearch:")) {
+                        if (Hawk.get(HawkConfig.FAST_SEARCH_MODE, false) && enableFastSearch()) {
+                            jumpActivity(FastSearchActivity.class, bundle);
+                        } else {
+                            jumpActivity(SearchActivity.class, bundle);
                         }
                     } else {
-                        if (video.id == null || video.id.isEmpty() || video.id.startsWith("msearch:")) {
-                            if(Hawk.get(HawkConfig.FAST_SEARCH_MODE, false) && enableFastSearch()){
-                                jumpActivity(FastSearchActivity.class, bundle);
-                            }else {
-                                jumpActivity(SearchActivity.class, bundle);
-                            }
-                        } else {
-                            jumpActivity(DetailActivity.class, bundle);
-                        }
+                        jumpActivity(DetailActivity.class, bundle);
                     }
-
                 }
             }
         });
-        // takagen99 : Long Press to Fast Search
+
         gridAdapter.setOnItemLongClickListener(new BaseQuickAdapter.OnItemLongClickListener() {
             @Override
             public boolean onItemLongClick(BaseQuickAdapter adapter, View view, int position) {
                 FastClickCheckUtil.check(view);
+                if (gridAdapter.getData().size() <= position) return false;
                 Movie.Video video = gridAdapter.getData().get(position);
-                if (video != null) {
-                    Bundle bundle = new Bundle();
-                    bundle.putString("id", video.id);
-                    bundle.putString("sourceKey", video.sourceKey);
-                    bundle.putString("title", video.name);
-                    jumpActivity(FastSearchActivity.class, bundle);
-                }
+                if (video == null) return false;
+                Bundle bundle = new Bundle();
+                bundle.putString("id", video.id);
+                bundle.putString("sourceKey", video.sourceKey);
+                bundle.putString("title", video.name);
+                jumpActivity(FastSearchActivity.class, bundle);
                 return true;
             }
         });
+
         gridAdapter.setLoadMoreView(new LoadMoreView());
         setLoadSir(mGridView);
 
-        // 添加空数据提示（用户友好）
+        // 空数据提示（支持触控点击）
         TextView emptyTv = new TextView(mContext);
-        emptyTv.setText("暂无频道，请按菜单键进入设置添加订阅源");
+        emptyTv.setText("暂无直播频道\n请按菜单键或点击这里进入设置添加订阅源");
         emptyTv.setTextColor(0xFFFFFFFF);
-        emptyTv.setTextSize(18);
+        emptyTv.setTextSize(20);
         emptyTv.setGravity(android.view.Gravity.CENTER);
-        emptyTv.setPadding(0, 200, 0, 0);
+        emptyTv.setPadding(0, 300, 0, 0);
+        emptyTv.setClickable(true);
+        emptyTv.setFocusable(true);
+        emptyTv.setOnClickListener(v -> {
+            Toast.makeText(mContext, "请按菜单键进入设置添加源", Toast.LENGTH_SHORT).show();
+        });
         gridAdapter.setEmptyView(emptyTv);
     }
 
@@ -350,12 +367,12 @@ public class GridFragment extends BaseLazyFragment {
     }
 
     public boolean isLoad() {
-        return isLoad || !mGrids.empty(); //如果有缓存页的话也可以认为是加载了数据的
+        return isLoad || !mGrids.empty();
     }
 
     private void initData() {
         if (ApiConfig.get().getHomeSourceBean() == null || ApiConfig.get().getHomeSourceBean().getApi() == null) {
-            showEmpty();  // 无源直接显示空提示
+            showEmpty();
             return;
         }
         showLoading();
