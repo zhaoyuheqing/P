@@ -171,7 +171,7 @@ public class GridFragment extends BaseLazyFragment {
 
     private ImgUtil.Style style;
 
-    // 更改当前页面（核心修改：加判空保护 ImgUtil.initStyle()）
+    // 更改当前页面（彻底禁用 ImgUtil.initStyle()，纯直播壳不需要）
     private void createView() {
         this.saveCurrentView(); // 保存当前页面
         if (mGridView == null) { // 从layout中拿view
@@ -189,12 +189,9 @@ public class GridFragment extends BaseLazyFragment {
         }
         mGridView.setHasFixedSize(true);
 
-        // 修改处1：加判空保护（防止源未加载时的 NPE）
-        style = null;
-        if (ApiConfig.get().getHomeSourceBean() != null) {
-            style = ImgUtil.initStyle();
-        }
-        // style 为 null 时，GridAdapter 会用默认样式
+        // 彻底禁用风格初始化（纯直播壳不需要首页 style，避免任何 NPE）
+        // style = ImgUtil.initStyle();  // ← 已注释，不再调用
+        style = null;  // 强制 null，让 GridAdapter 使用默认样式
 
         gridAdapter = new GridAdapter(isFolederMode(), style);
         this.page = 1;
@@ -301,7 +298,7 @@ public class GridFragment extends BaseLazyFragment {
         gridAdapter.setLoadMoreView(new LoadMoreView());
         setLoadSir(mGridView);
 
-        // 修改处2：添加空数据提示（用户友好）
+        // 添加空数据提示（用户友好）
         TextView emptyTv = new TextView(mContext);
         emptyTv.setText("暂无频道，请按菜单键进入设置添加订阅源");
         emptyTv.setTextColor(0xFFFFFFFF);
@@ -357,9 +354,8 @@ public class GridFragment extends BaseLazyFragment {
     }
 
     private void initData() {
-        // 修改处3：加判空保护（防止无源时崩溃）
         if (ApiConfig.get().getHomeSourceBean() == null || ApiConfig.get().getHomeSourceBean().getApi() == null) {
-            showEmpty();  // 显示空提示
+            showEmpty();  // 无源直接显示空提示
             return;
         }
         showLoading();
@@ -370,7 +366,6 @@ public class GridFragment extends BaseLazyFragment {
     }
 
     private void toggleFilterStatus() {
-        // 修改处4：加判空（防止 sortData.filters null）
         if (sortData != null && sortData.filters != null && !sortData.filters.isEmpty()) {
             int count = sortData.filterSelectCount();
             EventBus.getDefault().post(new RefreshEvent(RefreshEvent.TYPE_FILTER_CHANGE, count));
@@ -400,13 +395,11 @@ public class GridFragment extends BaseLazyFragment {
         LayoutInflater inflater = LayoutInflater.from(context);
         assert context != null;
 
-        // 获取动态主题颜色
         TypedArray a = getContext().obtainStyledAttributes(R.styleable.themeColor);
-        int selectedColor = a.getColor(R.styleable.themeColor_color_theme, 0); // 选择的颜色
+        int selectedColor = a.getColor(R.styleable.themeColor_color_theme, 0);
         int defaultColor = ContextCompat.getColor(context, R.color.color_FFFFFF);
-        // 释放 TypedArray 资源
         a.recycle();
-        // 遍历过滤条件数据
+
         for (MovieSort.SortFilter filter : sortData.filters) {
             View line = inflater.inflate(R.layout.item_grid_filter, gridFilterDialog.filterRoot, false);
             TextView filterNameTv = line.findViewById(R.id.filterName);
@@ -420,14 +413,12 @@ public class GridFragment extends BaseLazyFragment {
             final ArrayList<String> values = new ArrayList<>(filter.values.keySet());
             final ArrayList<String> keys = new ArrayList<>(filter.values.values());
             adapter.setOnItemClickListener(new BaseQuickAdapter.OnItemClickListener() {
-                // 用于记录上一次选中的 view
                 View previousSelectedView = null;
                 @Override
                 public void onItemClick(BaseQuickAdapter adapter, View view, int position) {
                     String currentSelection = sortData.filterSelect.get(key);
                     String newSelection = keys.get(position);
                     if (currentSelection == null || !currentSelection.equals(newSelection)) {
-                        // 更新选中状态
                         sortData.filterSelect.put(key, newSelection);
                         updateViewStyle(view, selectedColor, true);
                         if (previousSelectedView != null) {
@@ -435,7 +426,6 @@ public class GridFragment extends BaseLazyFragment {
                         }
                         previousSelectedView = view;
                     } else {
-                        // 取消选中
                         sortData.filterSelect.remove(key);
                         if (previousSelectedView != null) {
                             updateViewStyle(previousSelectedView, defaultColor, false);
