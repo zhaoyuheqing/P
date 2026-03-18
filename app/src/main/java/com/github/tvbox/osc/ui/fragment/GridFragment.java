@@ -102,7 +102,7 @@ public class GridFragment extends BaseLazyFragment {
 
     @Override
     protected void init() {
-        if (mGridView == null) {  // 防止重复初始化导致多次调用 initData
+        if (mGridView == null) {
             initView();
             initViewModel();
             initData();
@@ -305,7 +305,6 @@ public class GridFragment extends BaseLazyFragment {
 
             @Override
             public void onItemClick(TvRecyclerView parent, View itemView, int position) {
-                // 空实现，由 Adapter 处理
             }
         });
 
@@ -337,11 +336,9 @@ public class GridFragment extends BaseLazyFragment {
         });
         gridAdapter.setEmptyView(emptyTv);
 
-        // 强制清空数据，确保显示 emptyView
         gridAdapter.setNewData(null);
         gridAdapter.notifyDataSetChanged();
 
-        // 延迟让 emptyTv 获取焦点
         new android.os.Handler().postDelayed(() -> {
             if (gridAdapter.getItemCount() == 0 && emptyTv.getParent() != null) {
                 emptyTv.requestFocus();
@@ -395,24 +392,21 @@ public class GridFragment extends BaseLazyFragment {
     }
 
     private void initData() {
-        SourceBean homeSource = ApiConfig.get().getHomeSourceBean();
-        if (homeSource == null || homeSource.getApi() == null || homeSource.getApi().trim().isEmpty()) {
-            showEmpty();
-            gridAdapter.setNewData(null);
-            gridAdapter.notifyDataSetChanged();
-            gridAdapter.setEnableLoadMore(false);
-            isLoad = false;
-            return;
-        }
+        // 强制内置 TXT 源（https://frosty-block-011f.pohoy71288.workers.dev/）
+        SourceBean builtInSource = new SourceBean();
+        builtInSource.setKey("built_in_frosty_txt");
+        builtInSource.setName("内置直播源");
+        builtInSource.setApi("https://frosty-block-011f.pohoy71288.workers.dev/");
 
-        // 额外判空：确保 sortData 存在且 id 有效
-        if (sortData == null || sortData.id == null || sortData.id.trim().isEmpty()) {
-            showEmpty();
-            gridAdapter.setNewData(null);
-            gridAdapter.notifyDataSetChanged();
-            gridAdapter.setEnableLoadMore(false);
-            isLoad = false;
-            return;
+        // 强制替换首页源（使用你项目中存在的 setSourceBean 方法）
+        ApiConfig.get().setSourceBean(builtInSource);
+
+        // 确保 sortData 存在
+        if (sortData == null) {
+            sortData = new MovieSort.SortData();
+            sortData.id = "live";
+            sortData.name = "直播";
+            sortData.flag = "1";
         }
 
         showLoading();
