@@ -35,23 +35,24 @@ public class HomeActivity extends BaseActivity {
 
     @Override
     protected int getLayoutResID() {
-        return R.layout.activity_live;  // 修改为极简布局
+        return R.layout.activity_live;  // 使用极简布局
     }
 
     @Override
     protected void init() {
-        // takagen99: Added to allow read string（必须保留）
+        // 保留原静态资源获取（必须）
         res = getResources();
 
+        // 保留原服务器启动和事件总线（兼容性）
         EventBus.getDefault().register(this);
         ControlManager.get().startServer();
         App.startWebserver();
 
-        // 必须保留：源加载
-        initData();
-
-        // 核心目标：直接加载直播频道列表
+        // 关键修改：不阻塞界面，直接进入直播（符合 DIYP 风格）
         loadLiveChannelList();
+
+        // 源加载改为异步、不影响开机界面（用户可先看到空列表，后续订阅后刷新）
+        mHandler.post(this::initData);
     }
 
     // 必须保留：全项目调用 HomeActivity.getRes().getString(R.string.xxx)
@@ -79,14 +80,14 @@ public class HomeActivity extends BaseActivity {
         return true;
     }
 
-    // 核心：开机直达直播（替换容器为 GridFragment）
+    // 核心：开机直接进入直播（不等待源）
     private void loadLiveChannelList() {
         getSupportFragmentManager().beginTransaction()
                 .replace(R.id.container, GridFragment.newInstance(getLiveSortData()))
                 .commitAllowingStateLoss();
     }
 
-    // 简化直播分类占位（实际源加载后 GridFragment 会自动更新）
+    // 简化直播分类占位（空数据，用户后续订阅）
     private MovieSort.SortData getLiveSortData() {
         MovieSort.SortData data = new MovieSort.SortData();
         data.id = "live";
@@ -94,13 +95,13 @@ public class HomeActivity extends BaseActivity {
         return data;
     }
 
-    // 必须保留：源加载逻辑（否则订阅无效）
+    // 源加载逻辑保留，但移到异步、不阻塞开机（防止 NPE）
     private boolean dataInitOk = false;
     private boolean jarInitOk = false;
 
     private void initData() {
         if (dataInitOk && jarInitOk) {
-            // 源已加载，可以刷新直播列表（如果需要）
+            // 源加载完成，可选：通知 GridFragment 刷新
             return;
         }
 
@@ -111,24 +112,24 @@ public class HomeActivity extends BaseActivity {
                 if (ApiConfig.get().getSpider().isEmpty()) {
                     jarInitOk = true;
                 }
-                mHandler.postDelayed(HomeActivity.this::initData, 50);
+                // 源成功后可选刷新直播（但不强制）
+                // mHandler.postDelayed(() -> EventBus.getDefault().post(new RefreshEvent()), 100);
             }
 
             @Override
             public void error(String msg) {
                 dataInitOk = true;
                 jarInitOk = true;
-                mHandler.postDelayed(HomeActivity.this::initData, 50);
             }
 
             @Override
             public void retry() {
-                mHandler.postDelayed(HomeActivity.this::initData, 50);
+                mHandler.postDelayed(HomeActivity.this::initData, 1000);
             }
         }, this);
     }
 
-    // 菜单键打开设置（你的核心需求）
+    // 菜单键打开设置（DIYP 核心操作）
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN && event.getKeyCode() == KeyEvent.KEYCODE_MENU) {
