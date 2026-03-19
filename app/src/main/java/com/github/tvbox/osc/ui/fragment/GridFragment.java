@@ -1,37 +1,29 @@
 package com.github.tvbox.osc.ui.fragment;
 
-import android.content.res.TypedArray;
-import android.content.Context;
 import android.os.Bundle;
-import android.view.LayoutInflater;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.Gravity;
 import android.view.View;
-import android.view.ViewGroup;
-import android.view.animation.BounceInterpolator;
-import androidx.core.content.ContextCompat;
+import android.widget.TextView;
 import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import com.blankj.utilcode.util.GsonUtils;
+
 import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.base.BaseLazyFragment;
 import com.github.tvbox.osc.bean.Movie;
 import com.github.tvbox.osc.bean.MovieSort;
-import com.github.tvbox.osc.ui.activity.DetailActivity;
-import com.github.tvbox.osc.ui.activity.FastSearchActivity;
-import com.github.tvbox.osc.ui.activity.SearchActivity;
+import com.github.tvbox.osc.ui.activity.LivePlayActivity;   // 确认使用这个类
+import com.github.tvbox.osc.ui.activity.SettingActivity;
 import com.github.tvbox.osc.ui.adapter.GridAdapter;
-import com.github.tvbox.osc.ui.adapter.GridFilterKVAdapter;
-import com.github.tvbox.osc.ui.dialog.GridFilterDialog;
 import com.github.tvbox.osc.ui.tv.widget.LoadMoreView;
-import com.github.tvbox.osc.util.ImgUtil;
 import com.github.tvbox.osc.util.FastClickCheckUtil;
 import com.github.tvbox.osc.util.LOG;
-import com.github.tvbox.osc.util.HawkConfig;
-import com.orhanobut.hawk.Hawk;
 import com.owen.tvrecyclerview.widget.TvRecyclerView;
 import com.owen.tvrecyclerview.widget.V7GridLayoutManager;
-import com.owen.tvrecyclerview.widget.V7LinearLayoutManager;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -39,288 +31,131 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Stack;
-
-import android.os.Handler;
-import android.os.Looper;
 
 /**
- * @author pj567
- * @date :2020/12/21
- * @description: 纯直播壳 - 内置 TXT 源，完全去除首页源依赖
+ * 纯直播极简壳 - 最终优化版
+ * - 无任何首页源依赖
+ * - 内置 TXT 直播源
+ * - 点击频道 → 直接跳 LivePlayActivity
+ * - 长按任意位置（包括空状态）→ 跳 SettingActivity 添加源
+ * - 支持遥控焦点 + 触屏
+ * - 空状态友好提示，可点击添加源
  */
 public class GridFragment extends BaseLazyFragment {
-    private MovieSort.SortData sortData = null;
+
     private TvRecyclerView mGridView;
     private GridAdapter gridAdapter;
-    private int page = 1;
-    private int maxPage = 1;
     private boolean isLoad = false;
-    private boolean isTop = true;
-    private View focusedView = null;
 
-    private static class GridInfo{
-        public String sortID="";
-        public TvRecyclerView mGridView;
-        public GridAdapter gridAdapter;
-        public int page = 1;
-        public int maxPage = 1;
-        public boolean isLoad = false;
-        public View focusedView = null;
-    }
-
-    Stack<GridInfo> mGrids = new Stack<GridInfo>(); //ui栈
-
-    // 内置直播源（TXT 格式）
-    private static final String BUILT_IN_LIVE_SOURCE = "https://frosty-block-011f.pohoy71288.workers.dev/";
+    // 内置直播源 TXT 地址（你之前用的）
+    private static final String BUILT_IN_URL = "https://frosty-block-011f.pohoy71288.workers.dev/";
 
     public static GridFragment newInstance(MovieSort.SortData sortData) {
-        return new GridFragment().setArguments(sortData);
+        GridFragment fragment = new GridFragment();
+        fragment.sortData = sortData;  // 占位兼容
+        return fragment;
     }
 
-    public GridFragment setArguments(MovieSort.SortData sortData) {
-        this.sortData = sortData;
-        return this;
-    }
+    private MovieSort.SortData sortData;  // 不实际使用
 
     @Override
     protected int getLayoutResID() {
         return R.layout.fragment_grid;
     }
-    
-    @Override
-    public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        if (savedInstanceState != null && this.sortData == null) {
-            this.sortData = GsonUtils.fromJson(savedInstanceState.getString("sortDataJson"), MovieSort.SortData.class);
-        }
-    }
 
     @Override
     protected void init() {
-        if (mGridView == null) {
-            initView();
-            loadBuiltInLiveChannels();  // 直接加载内置源
-        }
-    }
-    
-    @Override
-    public void onSaveInstanceState(@NonNull Bundle outState) {
-        super.onSaveInstanceState(outState);
-        outState.putString("sortDataJson", GsonUtils.toJson(sortData));        
-    }
-
-    private void changeView(String id,Boolean isFolder){
-        if(isFolder){
-            this.sortData.flag =style==null?"1":"2";
-        }else {
-            this.sortData.flag ="2";
-        }
         initView();
-        this.sortData.id = id;
-        // 不重新加载源，只切换 UI 模式
-    }
-
-    public boolean isFolederMode() {
-        return (getUITag() == '1');
-    }
-
-    public char getUITag() {
-        return (sortData == null || sortData.flag == null || sortData.flag.length() == 0) ? '0' : sortData.flag.charAt(0);
-    }
-
-    public boolean enableFastSearch() {  
-        return sortData.flag == null || sortData.flag.length() < 2 || (sortData.flag.charAt(1) == '1'); 
-    }
-
-    private void saveCurrentView() {
-        if (this.mGridView == null) return;
-        GridInfo info = new GridInfo();
-        info.sortID = this.sortData.id;
-        info.mGridView = this.mGridView;
-        info.gridAdapter = this.gridAdapter;
-        info.page = this.page;
-        info.maxPage = this.maxPage;
-        info.isLoad = this.isLoad;
-        info.focusedView = this.focusedView;
-        this.mGrids.push(info);
-    }
-
-    public boolean restoreView() {
-        if (mGrids.empty()) return false;
-        this.showSuccess();
-        ((ViewGroup) mGridView.getParent()).removeView(this.mGridView);
-        GridInfo info = mGrids.pop();
-        this.sortData.id = info.sortID;
-        this.mGridView = info.mGridView;
-        this.gridAdapter = info.gridAdapter;
-        this.page = info.page;
-        this.maxPage = info.maxPage;
-        this.isLoad = info.isLoad;
-        this.focusedView = info.focusedView;
-        this.mGridView.setVisibility(View.VISIBLE);
-        if (mGridView != null) {
-            mGridView.requestFocus();
-            if (info.focusedView != null) {
-                info.focusedView.requestFocus();
-            }
-        }
-
-        if (gridAdapter != null) {
-            mGridView.setAdapter(gridAdapter);
-            rebindClickListeners();
-        }
-
-        return true;
-    }
-
-    private ImgUtil.Style style;
-
-    private void createView() {
-        this.saveCurrentView();
-        if (mGridView == null) {
-            mGridView = findViewById(R.id.mGridView);
-        } else {
-            TvRecyclerView v3 = new TvRecyclerView(this.mContext);
-            v3.setSpacingWithMargins(10, 10);
-            v3.setLayoutParams(mGridView.getLayoutParams());
-            v3.setPadding(mGridView.getPaddingLeft(), mGridView.getPaddingTop(), mGridView.getPaddingRight(), mGridView.getPaddingBottom());
-            v3.setClipToPadding(mGridView.getClipToPadding());
-            ((ViewGroup) mGridView.getParent()).addView(v3);
-            mGridView.setVisibility(View.GONE);
-            mGridView = v3;
-            mGridView.setVisibility(View.VISIBLE);
-
-            if (gridAdapter != null) {
-                mGridView.setAdapter(gridAdapter);
-                rebindClickListeners();
-            }
-        }
-        mGridView.setHasFixedSize(true);
-
-        style = null;
-
-        gridAdapter = new GridAdapter(isFolederMode(), style);
-        this.page = 1;
-        this.maxPage = 1;
-        this.isLoad = false;
+        loadChannels();
     }
 
     private void initView() {
-        this.createView();
+        mGridView = findViewById(R.id.mGridView);
+        mGridView.setHasFixedSize(true);
+        mGridView.setLayoutManager(new V7GridLayoutManager(mContext, 5));  // 列数可调：5~6
+
+        gridAdapter = new GridAdapter(false, null);  // 简单网格，无海报/缩略图模式
         mGridView.setAdapter(gridAdapter);
 
-        mGridView.setFocusable(true);
-        mGridView.setFocusableInTouchMode(true);
-        mGridView.setClickable(true);
-
-        if (isFolederMode()) {
-            mGridView.setLayoutManager(new V7LinearLayoutManager(this.mContext, 1, false));
-        } else {
-            int spanCount = isBaseOnWidth() ? 5 : 6;
-            if (style != null) {
-                spanCount = ImgUtil.spanCountByStyle(style, spanCount);
-            }
-            if (spanCount == 1) {
-                mGridView.setLayoutManager(new V7LinearLayoutManager(mContext, spanCount, false));
-            } else {
-                mGridView.setLayoutManager(new V7GridLayoutManager(mContext, spanCount));
-            }
-        }
-
+        // 遥控器焦点放大动画
         mGridView.setOnItemListener(new TvRecyclerView.OnItemListener() {
             @Override
             public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {
-                itemView.animate().scaleX(1.0f).scaleY(1.0f).setDuration(300).setInterpolator(new BounceInterpolator()).start();
+                itemView.animate().scaleX(1.0f).scaleY(1.0f).setDuration(200).start();
             }
 
             @Override
             public void onItemSelected(TvRecyclerView parent, View itemView, int position) {
-                itemView.animate().scaleX(1.2f).scaleY(1.2f).setDuration(300).setInterpolator(new BounceInterpolator()).start();
+                itemView.animate().scaleX(1.15f).scaleY(1.15f).setDuration(200).start();
             }
 
             @Override
-            public void onItemClick(TvRecyclerView parent, View itemView, int position) {
+            public void onItemClick(TvRecyclerView parent, View itemView, int position) { }
+        });
+
+        // 长按整个网格（包括空白）跳转添加源
+        mGridView.setOnLongClickListener(v -> {
+            jumpToSetting();
+            return true;
+        });
+
+        // 点击频道 → 直接播放
+        gridAdapter.setOnItemClickListener((adapter, view, position) -> {
+            FastClickCheckUtil.check(view);
+            Movie.Video video = gridAdapter.getData().get(position);
+            if (video != null && video.vodPlayUrl != null && !video.vodPlayUrl.isEmpty()) {
+                Bundle bundle = new Bundle();
+                bundle.putString("id", video.id);
+                bundle.putString("sourceKey", "built_in");
+                bundle.putString("title", video.name);
+                bundle.putString("url", video.vodPlayUrl);      // LivePlayActivity 常用参数
+                jumpActivity(LivePlayActivity.class, bundle);
+            } else {
+                Toast.makeText(mContext, "无效播放地址", Toast.LENGTH_SHORT).show();
             }
         });
 
-        mGridView.setOnInBorderKeyEventListener(new TvRecyclerView.OnInBorderKeyEventListener() {
-            @Override
-            public boolean onInBorderKeyEvent(int direction, View focused) {
-                if (direction == View.FOCUS_UP) {
-                }
-                return false;
-            }
+        // 长按频道也跳转添加源（统一体验）
+        gridAdapter.setOnItemLongClickListener((adapter, view, position) -> {
+            FastClickCheckUtil.check(view);
+            jumpToSetting();
+            return true;
         });
-
-        rebindClickListeners();
 
         gridAdapter.setLoadMoreView(new LoadMoreView());
         gridAdapter.setEnableLoadMore(false);
+
+        // 空状态视图：大字提示 + 可点击添加源
+        TextView emptyTv = new TextView(mContext);
+        emptyTv.setText("暂无直播频道\n\n长按遥控器任意键 或 点击这里\n添加/更新直播源");
+        emptyTv.setTextColor(0xFFFFFFFF);
+        emptyTv.setTextSize(22);
+        emptyTv.setGravity(Gravity.CENTER);
+        emptyTv.setPadding(0, 400, 0, 0);
+        emptyTv.setClickable(true);
+        emptyTv.setFocusable(true);
+        emptyTv.setFocusableInTouchMode(true);
+        emptyTv.setOnClickListener(v -> jumpToSetting());
+        gridAdapter.setEmptyView(emptyTv);
     }
 
-    private void rebindClickListeners() {
-        gridAdapter.setOnItemClickListener(new BaseQuickAdapter.OnItemClickListener() {
-            @Override
-            public void onItemClick(BaseQuickAdapter adapter, View view, int position) {
-                FastClickCheckUtil.check(view);
-                Movie.Video video = gridAdapter.getData().get(position);
-                if (video != null) {
-                    Bundle bundle = new Bundle();
-                    bundle.putString("id", video.id);
-                    bundle.putString("sourceKey", video.sourceKey);
-                    bundle.putString("title", video.name);
-                    if( video.tag !=null && (video.tag.equals("folder") || video.tag.equals("cover"))){
-                        focusedView = view;
-                        if(("12".indexOf(getUITag()) != -1)){
-                            changeView(video.id,video.tag.equals("folder"));
-                        }else {
-                            changeView(video.id,false);
-                        }
-                    } else {
-                        if (video.id == null || video.id.isEmpty() || video.id.startsWith("msearch:")) {
-                            if(Hawk.get(HawkConfig.FAST_SEARCH_MODE, false) && enableFastSearch()){
-                                jumpActivity(FastSearchActivity.class, bundle);
-                            }else {
-                                jumpActivity(SearchActivity.class, bundle);
-                            }
-                        } else {
-                            jumpActivity(DetailActivity.class, bundle);
-                        }
-                    }
-                }
-            }
-        });
-
-        gridAdapter.setOnItemLongClickListener(new BaseQuickAdapter.OnItemLongClickListener() {
-            @Override
-            public boolean onItemLongClick(BaseQuickAdapter adapter, View view, int position) {
-                FastClickCheckUtil.check(view);
-                Movie.Video video = gridAdapter.getData().get(position);
-                if (video != null) {
-                    Bundle bundle = new Bundle();
-                    bundle.putString("id", video.id);
-                    bundle.putString("sourceKey", video.sourceKey);
-                    bundle.putString("title", video.name);
-                    jumpActivity(FastSearchActivity.class, bundle);
-                }
-                return true;
-            }
-        });
+    private void jumpToSetting() {
+        jumpActivity(SettingActivity.class);
+        // 如果想跳到具体“直播源” tab，可以加参数：
+        // Bundle b = new Bundle(); b.putString("tab", "live"); jumpActivity(SettingActivity.class, b);
     }
 
-    // 手动加载内置 TXT 直播源（完全不依赖首页源）
-    private void loadBuiltInLiveChannels() {
+    // 加载内置 TXT 直播源（name,url 格式）
+    private void loadChannels() {
         new Thread(() -> {
             try {
-                URL url = new URL(BUILT_IN_LIVE_SOURCE);
+                URL url = new URL(BUILT_IN_URL);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("GET");
-                conn.setConnectTimeout(15000);
-                conn.setReadTimeout(15000);
+                conn.setConnectTimeout(12000);
+                conn.setReadTimeout(12000);
 
                 BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
-                List<Movie.Video> videos = new ArrayList<>();
+                List<Movie.Video> channels = new ArrayList<>();
                 String line;
                 int index = 1;
 
@@ -330,59 +165,38 @@ public class GridFragment extends BaseLazyFragment {
 
                     String[] parts = line.split(",", 2);
                     if (parts.length >= 2) {
-                        Movie.Video video = new Movie.Video();
-                        video.name = parts[0].trim();
-                        video.id = String.valueOf(index++);
-                        video.sourceKey = "built_in_live";
-                        video.tag = "live";
-                        video.pic = "";
-                        video.vodPlayUrl = parts[1].trim();  // 播放地址
-                        videos.add(video);
+                        Movie.Video v = new Movie.Video();
+                        v.name = parts[0].trim();
+                        v.id = "live_" + index++;
+                        v.sourceKey = "built_in";
+                        v.vodPlayUrl = parts[1].trim();
+                        v.tag = "live";
+                        v.pic = "";  // 无需海报
+                        channels.add(v);
                     }
                 }
                 reader.close();
-                conn.disconnect();
 
-                // UI 线程更新网格
                 new Handler(Looper.getMainLooper()).post(() -> {
-                    if (videos.isEmpty()) {
+                    if (channels.isEmpty()) {
                         showEmpty();
                     } else {
                         showSuccess();
                         isLoad = true;
-                        gridAdapter.setNewData(videos);
+                        gridAdapter.setNewData(channels);
                     }
                 });
+
             } catch (Exception e) {
-                LOG.e("内置直播源加载失败", e);
-                new Handler(Looper.getMainLooper()).post(() -> showEmpty());
+                LOG.e("直播源加载失败", e);
+                new Handler(Looper.getMainLooper()).post(this::showEmpty);
             }
         }).start();
     }
 
-    public boolean isLoad() {
-        return isLoad || !mGrids.empty();
-    }
-
-    public boolean isTop() {
-        return isTop;
-    }
-
-    public void scrollTop() {
-        isTop = true;
-        mGridView.scrollToPosition(0);
-    }
-
-    public void showFilter() {
-        // 无源不显示过滤器
-    }
-
-    public void setFilterDialogData() {
-        // 无源不处理
-    }
-
+    // 手动刷新（后续设置添加源后可调用）
     public void forceRefresh() {
-        page = 1;
-        loadBuiltInLiveChannels();  // 刷新内置源
+        gridAdapter.setNewData(null);
+        loadChannels();
     }
 }
