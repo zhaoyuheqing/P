@@ -11,19 +11,13 @@ import androidx.core.content.ContextCompat;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.lifecycle.Observer;
-import androidx.lifecycle.ViewModelProvider;
 import com.blankj.utilcode.util.GsonUtils;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.github.tvbox.osc.R;
-import com.github.tvbox.osc.api.ApiConfig;
 import com.github.tvbox.osc.base.BaseLazyFragment;
-import com.github.tvbox.osc.bean.AbsXml;
 import com.github.tvbox.osc.bean.Movie;
 import com.github.tvbox.osc.bean.MovieSort;
-import com.github.tvbox.osc.bean.SourceBean;
-import com.github.tvbox.osc.event.RefreshEvent;
 import com.github.tvbox.osc.ui.activity.DetailActivity;
 import com.github.tvbox.osc.ui.activity.FastSearchActivity;
 import com.github.tvbox.osc.ui.activity.SearchActivity;
@@ -35,7 +29,6 @@ import com.github.tvbox.osc.util.ImgUtil;
 import com.github.tvbox.osc.util.FastClickCheckUtil;
 import com.github.tvbox.osc.util.LOG;
 import com.github.tvbox.osc.util.HawkConfig;
-import com.github.tvbox.osc.viewmodel.SourceViewModel;
 import com.orhanobut.hawk.Hawk;
 import com.owen.tvrecyclerview.widget.TvRecyclerView;
 import com.owen.tvrecyclerview.widget.V7GridLayoutManager;
@@ -50,15 +43,11 @@ import org.json.JSONObject;
 import java.util.Stack;
 
 /**
- * @author pj567
- * @date :2020/12/21
- * @description:
+ * 纯直播网格界面，无源依赖，空网格 + 可交互提示
  */
 public class GridFragment extends BaseLazyFragment {
     private MovieSort.SortData sortData = null;
     private TvRecyclerView mGridView;
-    private SourceViewModel sourceViewModel;
-    private GridFilterDialog gridFilterDialog;
     private GridAdapter gridAdapter;
     private int page = 1;
     private int maxPage = 1;
@@ -104,8 +93,7 @@ public class GridFragment extends BaseLazyFragment {
     protected void init() {
         if (mGridView == null) {
             initView();
-            initViewModel();
-            initData();
+            // 不再调用 initViewModel 和 initData，因为不加载任何数据
         }
     }
     
@@ -123,8 +111,7 @@ public class GridFragment extends BaseLazyFragment {
         }
         initView();
         this.sortData.id = id;
-        initViewModel();
-        initData();
+        // 不再调用 initViewModel 和 initData
     }
 
     public boolean isFolederMode() {
@@ -185,31 +172,8 @@ public class GridFragment extends BaseLazyFragment {
             @Override
             public void onItemClick(BaseQuickAdapter adapter, View view, int position) {
                 FastClickCheckUtil.check(view);
-                Movie.Video video = gridAdapter.getData().get(position);
-                if (video != null) {
-                    Bundle bundle = new Bundle();
-                    bundle.putString("id", video.id);
-                    bundle.putString("sourceKey", video.sourceKey);
-                    bundle.putString("title", video.name);
-                    if( video.tag !=null && (video.tag.equals("folder") || video.tag.equals("cover"))){
-                        focusedView = view;
-                        if(("12".indexOf(getUITag()) != -1)){
-                            changeView(video.id,video.tag.equals("folder"));
-                        }else {
-                            changeView(video.id,false);
-                        }
-                    } else {
-                        if (video.id == null || video.id.isEmpty() || video.id.startsWith("msearch:")) {
-                            if(Hawk.get(HawkConfig.FAST_SEARCH_MODE, false) && enableFastSearch()){
-                                jumpActivity(FastSearchActivity.class, bundle);
-                            }else {
-                                jumpActivity(SearchActivity.class, bundle);
-                            }
-                        } else {
-                            jumpActivity(DetailActivity.class, bundle);
-                        }
-                    }
-                }
+                // 空网格时无数据，保留原有逻辑但不跳转
+                // 如果未来加数据，可恢复跳转
             }
         });
 
@@ -217,14 +181,7 @@ public class GridFragment extends BaseLazyFragment {
             @Override
             public boolean onItemLongClick(BaseQuickAdapter adapter, View view, int position) {
                 FastClickCheckUtil.check(view);
-                Movie.Video video = gridAdapter.getData().get(position);
-                if (video != null) {
-                    Bundle bundle = new Bundle();
-                    bundle.putString("id", video.id);
-                    bundle.putString("sourceKey", video.sourceKey);
-                    bundle.putString("title", video.name);
-                    jumpActivity(FastSearchActivity.class, bundle);
-                }
+                // 同上，空时不处理
                 return true;
             }
         });
@@ -284,13 +241,8 @@ public class GridFragment extends BaseLazyFragment {
             }
         }
 
-        gridAdapter.setOnLoadMoreListener(new BaseQuickAdapter.RequestLoadMoreListener() {
-            @Override
-            public void onLoadMoreRequested() {
-                gridAdapter.setEnableLoadMore(true);
-                sourceViewModel.getList(sortData, page);
-            }
-        }, mGridView);
+        // 禁用加载更多（无数据源，不需要）
+        gridAdapter.setEnableLoadMore(false);
 
         mGridView.setOnItemListener(new TvRecyclerView.OnItemListener() {
             @Override
@@ -320,10 +272,10 @@ public class GridFragment extends BaseLazyFragment {
         rebindClickListeners();
 
         gridAdapter.setLoadMoreView(new LoadMoreView());
-        setLoadSir(mGridView);
 
+        // 自定义空状态提示（必须可见、可焦点、可点击）
         TextView emptyTv = new TextView(mContext);
-        emptyTv.setText("暂无直播频道\n请按菜单键或点击这里进入设置添加订阅源");
+        emptyTv.setText("暂无直播频道\n点击这里或按菜单键进入设置添加源");
         emptyTv.setTextColor(0xFFFFFFFF);
         emptyTv.setTextSize(20);
         emptyTv.setGravity(android.view.Gravity.CENTER);
@@ -336,91 +288,37 @@ public class GridFragment extends BaseLazyFragment {
         });
         gridAdapter.setEmptyView(emptyTv);
 
+        // 强制空数据，确保显示 emptyTv
         gridAdapter.setNewData(null);
         gridAdapter.notifyDataSetChanged();
 
+        // 多次延迟强制焦点到 emptyTv
         new android.os.Handler().postDelayed(() -> {
-            if (gridAdapter.getItemCount() == 0 && emptyTv.getParent() != null) {
+            if (emptyTv.getParent() != null) {
+                emptyTv.requestFocus();
+                emptyTv.setSelected(true);
+            }
+        }, 300);
+
+        new android.os.Handler().postDelayed(() -> {
+            if (emptyTv.getParent() != null) {
                 emptyTv.requestFocus();
             }
         }, 800);
-    }
 
-    private void initViewModel() {
-        if (sourceViewModel != null) {
-            return;
-        }
-        sourceViewModel = new ViewModelProvider(this).get(SourceViewModel.class);
-        sourceViewModel.listResult.observe(this, new Observer<AbsXml>() {
-            @Override
-            public void onChanged(AbsXml absXml) {
-                if (absXml != null && absXml.movie != null && absXml.movie.videoList != null && absXml.movie.videoList.size() > 0) {
-                    if (page == 1) {
-                        showSuccess();
-                        isLoad = true;
-                        gridAdapter.setNewData(absXml.movie.videoList);
-                    } else {
-                        gridAdapter.addData(absXml.movie.videoList);
-                    }
-                    page++;
-                    maxPage = absXml.movie.pagecount;
-                    if (page > maxPage && maxPage!=0) {
-                        gridAdapter.loadMoreEnd();
-                        gridAdapter.setEnableLoadMore(false);
-                    } else {
-                        gridAdapter.loadMoreComplete();
-                        gridAdapter.setEnableLoadMore(true);
-                    }
-                } else {
-                    if (page == 1) {
-                        showEmpty();
-                    }
-                    if (page > maxPage && maxPage!=0) {
-                        Toast.makeText(getContext(), "没有更多了", Toast.LENGTH_SHORT).show();
-                        gridAdapter.loadMoreEnd();
-                    } else {
-                        gridAdapter.loadMoreComplete();
-                    }
-                    gridAdapter.setEnableLoadMore(false);
-                }
+        new android.os.Handler().postDelayed(() -> {
+            if (emptyTv.getParent() != null) {
+                emptyTv.requestFocus();
             }
-        });
+        }, 1500);
     }
 
     public boolean isLoad() {
         return isLoad || !mGrids.empty();
     }
 
-    private void initData() {
-        // 强制内置 TXT 源（https://frosty-block-011f.pohoy71288.workers.dev/）
-        SourceBean builtInSource = new SourceBean();
-        builtInSource.setKey("built_in_frosty_txt");
-        builtInSource.setName("内置直播源");
-        builtInSource.setApi("https://frosty-block-011f.pohoy71288.workers.dev/");
-
-        // 强制替换首页源（使用你项目中存在的 setSourceBean 方法）
-        ApiConfig.get().setSourceBean(builtInSource);
-
-        // 确保 sortData 存在
-        if (sortData == null) {
-            sortData = new MovieSort.SortData();
-            sortData.id = "live";
-            sortData.name = "直播";
-            sortData.flag = "1";
-        }
-
-        showLoading();
-        isLoad = false;
-        scrollTop();
-        toggleFilterStatus();
-        sourceViewModel.getList(sortData, page);
-    }
-
     private void toggleFilterStatus() {
-        if (sortData != null && sortData.filters != null && !sortData.filters.isEmpty()) {
-            int count = sortData.filterSelectCount();
-            EventBus.getDefault().post(new RefreshEvent(RefreshEvent.TYPE_FILTER_CHANGE, count));
-        }
+        // 无源不处理过滤器
     }
 
     public boolean isTop() {
@@ -433,71 +331,15 @@ public class GridFragment extends BaseLazyFragment {
     }
 
     public void showFilter() {
-        if (sortData != null && !sortData.filters.isEmpty() && gridFilterDialog == null) {
-            gridFilterDialog = new GridFilterDialog(mContext);
-            setFilterDialogData();
-        }
-        if (gridFilterDialog != null)
-            gridFilterDialog.show();
+        // 无源不显示过滤器
     }
 
     public void setFilterDialogData() {
-        Context context = getContext();
-        LayoutInflater inflater = LayoutInflater.from(context);
-        assert context != null;
-
-        TypedArray a = getContext().obtainStyledAttributes(R.styleable.themeColor);
-        int selectedColor = a.getColor(R.styleable.themeColor_color_theme, 0);
-        int defaultColor = ContextCompat.getColor(context, R.color.color_FFFFFF);
-        a.recycle();
-
-        for (MovieSort.SortFilter filter : sortData.filters) {
-            View line = inflater.inflate(R.layout.item_grid_filter, gridFilterDialog.filterRoot, false);
-            TextView filterNameTv = line.findViewById(R.id.filterName);
-            filterNameTv.setText(filter.name);
-            TvRecyclerView gridView = line.findViewById(R.id.mFilterKv);
-            gridView.setHasFixedSize(true);
-            gridView.setLayoutManager(new V7LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false));
-            GridFilterKVAdapter adapter = new GridFilterKVAdapter();
-            gridView.setAdapter(adapter);
-            final String key = filter.key;
-            final ArrayList<String> values = new ArrayList<>(filter.values.keySet());
-            final ArrayList<String> keys = new ArrayList<>(filter.values.values());
-            adapter.setOnItemClickListener(new BaseQuickAdapter.OnItemClickListener() {
-                View previousSelectedView = null;
-                @Override
-                public void onItemClick(BaseQuickAdapter adapter, View view, int position) {
-                    String currentSelection = sortData.filterSelect.get(key);
-                    String newSelection = keys.get(position);
-                    if (currentSelection == null || !currentSelection.equals(newSelection)) {
-                        sortData.filterSelect.put(key, newSelection);
-                        updateViewStyle(view, selectedColor, true);
-                        if (previousSelectedView != null) {
-                            updateViewStyle(previousSelectedView, defaultColor, false);
-                        }
-                        previousSelectedView = view;
-                    } else {
-                        sortData.filterSelect.remove(key);
-                        if (previousSelectedView != null) {
-                            updateViewStyle(previousSelectedView, defaultColor, false);
-                        }
-                        previousSelectedView = null;
-                    }
-                    forceRefresh();
-                }
-                private void updateViewStyle(View view, int color, boolean isBold) {
-                    TextView valueTv = view.findViewById(R.id.filterValue);
-                    valueTv.getPaint().setFakeBoldText(isBold);
-                    valueTv.setTextColor(color);
-                }
-            });
-            adapter.setNewData(values);
-            gridFilterDialog.filterRoot.addView(line);
-        }
+        // 无源不处理
     }
 
     public void forceRefresh() {
         page = 1;
-        initData();
+        // 无源不刷新
     }
 }
