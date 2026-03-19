@@ -4,6 +4,7 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 
@@ -11,26 +12,24 @@ import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.chad.library.adapter.base.BaseViewHolder;
 
 import com.github.tvbox.osc.R;
+import com.github.tvbox.osc.api.ApiConfig;
 import com.github.tvbox.osc.base.BaseLazyFragment;
 import com.github.tvbox.osc.bean.MovieSort;
+import com.github.tvbox.osc.event.RefreshEvent;
+import com.github.tvbox.osc.ui.activity.LivePlayActivity;
+import com.github.tvbox.osc.ui.activity.SettingActivity;
 import com.github.tvbox.osc.ui.adapter.GridAdapter;
 import com.github.tvbox.osc.ui.tv.widget.LoadMoreView;
 import com.github.tvbox.osc.util.FastClickCheckUtil;
 import com.owen.tvrecyclerview.widget.TvRecyclerView;
 import com.owen.tvrecyclerview.widget.V7GridLayoutManager;
 
-// 必须添加的额外 import（实现功能需要，原版没有）
-import com.github.tvbox.osc.api.ApiConfig;
-import com.github.tvbox.osc.event.RefreshEvent;
-import com.github.tvbox.osc.ui.activity.LivePlayActivity;
-import com.github.tvbox.osc.ui.activity.SettingActivity;
-
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
 /**
- * 纯直播壳 - 无内置源 + 添加源后自动进入 LivePlayActivity
+ * 纯直播壳 - 无内置源 + 点击/长按添加源 + 添加后自动进入播放
  */
 public class GridFragment extends BaseLazyFragment {
 
@@ -56,7 +55,7 @@ public class GridFragment extends BaseLazyFragment {
 
         initView();
 
-        // 检查是否有直播源（如果有，直接进入播放）
+        // 启动时检查是否有直播源
         if (ApiConfig.get().getChannelGroupList() != null && !ApiConfig.get().getChannelGroupList().isEmpty()) {
             jumpActivity(LivePlayActivity.class);
         } else {
@@ -74,6 +73,7 @@ public class GridFragment extends BaseLazyFragment {
 
         gridAdapter.setEnableLoadMore(false);
 
+        // 焦点动画
         mGridView.setOnItemListener(new TvRecyclerView.OnItemListener() {
             @Override
             public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {
@@ -95,13 +95,17 @@ public class GridFragment extends BaseLazyFragment {
             return true;
         });
 
-        // 空状态纯文字提示（无按钮）
+        // 空状态提示（可点击 + 长按都跳转）
         TextView emptyTv = new TextView(mContext);
-        emptyTv.setText("暂无直播频道\n\n长按屏幕任意位置\n添加直播源订阅");
+        emptyTv.setText("暂无直播频道\n\n点击这里或长按屏幕任意位置\n添加直播源订阅");
         emptyTv.setTextColor(0xFFFFFFFF);
         emptyTv.setTextSize(20);
         emptyTv.setGravity(Gravity.CENTER);
         emptyTv.setPadding(0, 300, 0, 0);
+        emptyTv.setClickable(true);
+        emptyTv.setFocusable(true);
+        emptyTv.setFocusableInTouchMode(true);
+        emptyTv.setOnClickListener(v -> jumpActivity(SettingActivity.class));
         gridAdapter.setEmptyView(emptyTv);
     }
 
@@ -110,6 +114,7 @@ public class GridFragment extends BaseLazyFragment {
         showEmpty();
     }
 
+    // 监听添加源后的刷新事件
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void onRefresh(RefreshEvent event) {
         jumpActivity(LivePlayActivity.class);
