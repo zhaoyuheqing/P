@@ -6,12 +6,12 @@ import android.view.View;
 import android.widget.TextView;
 
 import com.chad.library.adapter.base.BaseQuickAdapter;
-import com.chad.library.adapter.base.BaseViewHolder;  // 原版路径（3.x Brvah）
+import com.chad.library.adapter.base.BaseViewHolder;  // 原版路径（旧版 Brvah）
 import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.base.BaseLazyFragment;
 import com.github.tvbox.osc.bean.MovieSort;
 import com.github.tvbox.osc.event.RefreshEvent;
-import com.github.tvbox.osc.ui.activity.LivePlayActivity;  // ← 新增这个 import
+import com.github.tvbox.osc.ui.activity.LivePlayActivity;
 import com.github.tvbox.osc.ui.activity.SettingActivity;
 import com.github.tvbox.osc.ui.adapter.GridAdapter;
 import com.github.tvbox.osc.ui.tv.widget.LoadMoreView;
@@ -24,21 +24,22 @@ import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
 /**
- * 纯直播壳 - 无内置源版（修复版）
- * - 启动后显示空网格 + 添加订阅提示
- * - 添加源后监听 RefreshEvent → 自动跳 LivePlayActivity 显示频道
+ * 纯直播壳 - 无内置源 + 添加后自动进入 LivePlayActivity
+ * - 启动后：已有源 → 直接进入播放页
+ * - 无源 → 显示空提示 + 长按跳转设置添加源
+ * - 添加源成功 → 自动跳转 LivePlayActivity
  */
 public class GridFragment extends BaseLazyFragment {
 
     private TvRecyclerView mGridView;
-    private GridAdapter gridAdapter;  // 复用原版适配器
+    private GridAdapter gridAdapter;
 
     public static GridFragment newInstance() {
         return new GridFragment();
     }
 
     public static GridFragment newInstance(MovieSort.SortData sortData) {
-        return newInstance();  // 兼容旧调用
+        return newInstance();  // 兼容旧版调用
     }
 
     @Override
@@ -49,8 +50,17 @@ public class GridFragment extends BaseLazyFragment {
     @Override
     protected void init() {
         EventBus.getDefault().register(this);
+
         initView();
-        showEmptyState();
+
+        // 启动时检查是否已有直播源
+        if (!ApiConfig.get().getChannelGroupList().isEmpty()) {
+            // 已有源 → 直接进入播放界面
+            jumpActivity(LivePlayActivity.class);
+        } else {
+            // 无源 → 显示空提示
+            showEmptyState();
+        }
     }
 
     private void initView() {
@@ -58,7 +68,7 @@ public class GridFragment extends BaseLazyFragment {
         mGridView.setHasFixedSize(true);
         mGridView.setLayoutManager(new V7GridLayoutManager(mContext, 1));  // 单列显示提示
 
-        gridAdapter = new GridAdapter(false, null);  // 复用原版
+        gridAdapter = new GridAdapter(false, null);  // 复用原版适配器
         mGridView.setAdapter(gridAdapter);
 
         gridAdapter.setEnableLoadMore(false);
@@ -79,43 +89,33 @@ public class GridFragment extends BaseLazyFragment {
             public void onItemClick(TvRecyclerView parent, View itemView, int position) {}
         });
 
-        // 长按网格任意位置 → 添加源
+        // 长按任意位置 → 添加源（无点击跳转）
         mGridView.setOnLongClickListener(v -> {
-            jumpToAddLiveSource();
+            jumpActivity(SettingActivity.class);
             return true;
         });
 
-        // 空状态视图（可点击添加源）
+        // 空状态提示（纯文字，无按钮）
         TextView emptyTv = new TextView(mContext);
-        emptyTv.setText("暂无直播频道\n\n点击下方按钮或长按屏幕任意位置\n添加直播源订阅");
+        emptyTv.setText("暂无直播频道\n\n长按屏幕任意位置\n添加直播源订阅");
         emptyTv.setTextColor(0xFFFFFFFF);
         emptyTv.setTextSize(20);
         emptyTv.setGravity(Gravity.CENTER);
         emptyTv.setPadding(0, 300, 0, 0);
-        emptyTv.setClickable(true);
-        emptyTv.setFocusable(true);
-        emptyTv.setFocusableInTouchMode(true);
-        emptyTv.setOnClickListener(v -> jumpToAddLiveSource());
         gridAdapter.setEmptyView(emptyTv);
     }
 
     private void showEmptyState() {
-        gridAdapter.setNewData(null);  // 清空数据 → 显示空视图
+        gridAdapter.setNewData(null);
         showEmpty();
     }
 
-    private void jumpToAddLiveSource() {
-        jumpActivity(SettingActivity.class);
-    }
-
-    // 监听原版刷新事件（添加源后触发）
+    // 监听源更新事件（添加源后触发）
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void onRefresh(RefreshEvent event) {
-        // 原版添加源后常用 TYPE_LIVEPLAY_UPDATE 或 TYPE_SOURCE_CHANGED
-        if (event.type == RefreshEvent.TYPE_LIVEPLAY_UPDATE) {
-            // 源更新后直接进入播放界面（原版机制会自动加载频道列表）
-            jumpActivity(LivePlayActivity.class);
-        }
+        // 原版添加源后会触发 TYPE_LIVEPLAY_UPDATE 或类似事件
+        // 收到事件 → 说明源已更新 → 直接进入播放界面
+        jumpActivity(LivePlayActivity.class);
     }
 
     @Override
