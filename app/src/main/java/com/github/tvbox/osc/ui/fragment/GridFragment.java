@@ -6,6 +6,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.chad.library.adapter.base.BaseViewHolder;
@@ -20,7 +21,7 @@ import com.owen.tvrecyclerview.widget.TvRecyclerView;
 import com.owen.tvrecyclerview.widget.V7GridLayoutManager;
 
 /**
- * 纯直播壳 - 添加源后手动点击“进入直播”按钮跳转
+ * 纯直播壳 - 添加源后显示“进入直播”按钮，手动点击跳转
  */
 public class GridFragment extends BaseLazyFragment {
 
@@ -32,6 +33,11 @@ public class GridFragment extends BaseLazyFragment {
 
     public static GridFragment newInstance() {
         return new GridFragment();
+    }
+
+    // 兼容 HomeActivity 原版调用（忽略 SortData 参数）
+    public static GridFragment newInstance(Object sortData) {
+        return newInstance();
     }
 
     @Override
@@ -48,7 +54,7 @@ public class GridFragment extends BaseLazyFragment {
     private void initView() {
         mGridView = findViewById(R.id.mGridView);
         mGridView.setHasFixedSize(true);
-        mGridView.setLayoutManager(new V7GridLayoutManager(mContext, 1));
+        mGridView.setLayoutManager(new V7GridLayoutManager(requireContext(), 1));
 
         gridAdapter = new GridAdapter(false, null);
         mGridView.setAdapter(gridAdapter);
@@ -60,23 +66,24 @@ public class GridFragment extends BaseLazyFragment {
             return true;
         });
 
-        // 自定义空状态布局（包含两个按钮）
-        emptyLayout = new LinearLayout(mContext);
+        // 自定义空状态布局（两个按钮）
+        emptyLayout = new LinearLayout(requireContext());
         emptyLayout.setOrientation(LinearLayout.VERTICAL);
         emptyLayout.setGravity(Gravity.CENTER);
         emptyLayout.setPadding(0, 200, 0, 0);
 
-        TextView tvEmpty = new TextView(mContext);
+        TextView tvEmpty = new TextView(requireContext());
         tvEmpty.setText("暂无直播频道");
         tvEmpty.setTextColor(0xFFFFFFFF);
         tvEmpty.setTextSize(24);
         tvEmpty.setGravity(Gravity.CENTER);
         emptyLayout.addView(tvEmpty);
 
-        btnAddSource = new Button(mContext);
+        btnAddSource = new Button(requireContext());
         btnAddSource.setText("添加直播源");
         btnAddSource.setTextColor(0xFFFFFFFF);
-        btnAddSource.setBackgroundResource(R.drawable.button_background);  // 你需要一个按钮背景 drawable
+        // 先用默认背景（避免 drawable 不存在报错）
+        btnAddSource.setBackgroundColor(0xFF3366CC);  // 蓝色背景
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
@@ -86,10 +93,10 @@ public class GridFragment extends BaseLazyFragment {
         btnAddSource.setOnClickListener(v -> jumpActivity(SettingActivity.class));
         emptyLayout.addView(btnAddSource);
 
-        btnEnterLive = new Button(mContext);
+        btnEnterLive = new Button(requireContext());
         btnEnterLive.setText("进入直播");
         btnEnterLive.setTextColor(0xFFFFFFFF);
-        btnEnterLive.setBackgroundResource(R.drawable.button_background);
+        btnEnterLive.setBackgroundColor(0xFF4CAF50);  // 绿色背景
         params = new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
@@ -100,7 +107,7 @@ public class GridFragment extends BaseLazyFragment {
             if (ApiConfig.get().getChannelGroupList() != null && !ApiConfig.get().getChannelGroupList().isEmpty()) {
                 jumpActivity(LivePlayActivity.class);
             } else {
-                Toast.makeText(mContext, "暂无可用直播源，请先添加", Toast.LENGTH_SHORT).show();
+                Toast.makeText(requireContext(), "暂无可用直播源，请先添加", Toast.LENGTH_SHORT).show();
             }
         });
         emptyLayout.addView(btnEnterLive);
@@ -110,12 +117,10 @@ public class GridFragment extends BaseLazyFragment {
 
     private void updateUIState() {
         if (ApiConfig.get().getChannelGroupList() != null && !ApiConfig.get().getChannelGroupList().isEmpty()) {
-            // 有源 → 隐藏添加按钮，显示进入按钮
             btnAddSource.setVisibility(View.GONE);
             btnEnterLive.setVisibility(View.VISIBLE);
-            btnEnterLive.requestFocus();  // 焦点给进入按钮
+            btnEnterLive.requestFocus();
         } else {
-            // 无源 → 显示添加按钮，隐藏进入按钮
             btnAddSource.setVisibility(View.VISIBLE);
             btnEnterLive.setVisibility(View.GONE);
         }
@@ -124,7 +129,6 @@ public class GridFragment extends BaseLazyFragment {
     @Override
     public void onResume() {
         super.onResume();
-        // 从设置页返回后更新状态
         updateUIState();
     }
 }
