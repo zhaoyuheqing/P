@@ -16,7 +16,7 @@ import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.base.BaseLazyFragment;
 import com.github.tvbox.osc.bean.Movie;
 import com.github.tvbox.osc.bean.MovieSort;
-import com.github.tvbox.osc.ui.activity.LivePlayActivity;   // 确认使用这个类
+import com.github.tvbox.osc.ui.activity.LivePlayActivity;
 import com.github.tvbox.osc.ui.activity.SettingActivity;
 import com.github.tvbox.osc.ui.adapter.GridAdapter;
 import com.github.tvbox.osc.ui.tv.widget.LoadMoreView;
@@ -33,13 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 纯直播极简壳 - 最终优化版
- * - 无任何首页源依赖
- * - 内置 TXT 直播源
- * - 点击频道 → 直接跳 LivePlayActivity
- * - 长按任意位置（包括空状态）→ 跳 SettingActivity 添加源
- * - 支持遥控焦点 + 触屏
- * - 空状态友好提示，可点击添加源
+ * 纯直播极简壳 - 已修正字段为 url（兼容 takagen99/Box 标准）
  */
 public class GridFragment extends BaseLazyFragment {
 
@@ -47,16 +41,15 @@ public class GridFragment extends BaseLazyFragment {
     private GridAdapter gridAdapter;
     private boolean isLoad = false;
 
-    // 内置直播源 TXT 地址（你之前用的）
     private static final String BUILT_IN_URL = "https://frosty-block-011f.pohoy71288.workers.dev/";
 
     public static GridFragment newInstance(MovieSort.SortData sortData) {
         GridFragment fragment = new GridFragment();
-        fragment.sortData = sortData;  // 占位兼容
+        fragment.sortData = sortData;
         return fragment;
     }
 
-    private MovieSort.SortData sortData;  // 不实际使用
+    private MovieSort.SortData sortData;
 
     @Override
     protected int getLayoutResID() {
@@ -72,12 +65,11 @@ public class GridFragment extends BaseLazyFragment {
     private void initView() {
         mGridView = findViewById(R.id.mGridView);
         mGridView.setHasFixedSize(true);
-        mGridView.setLayoutManager(new V7GridLayoutManager(mContext, 5));  // 列数可调：5~6
+        mGridView.setLayoutManager(new V7GridLayoutManager(mContext, 5));
 
-        gridAdapter = new GridAdapter(false, null);  // 简单网格，无海报/缩略图模式
+        gridAdapter = new GridAdapter(false, null);
         mGridView.setAdapter(gridAdapter);
 
-        // 遥控器焦点放大动画
         mGridView.setOnItemListener(new TvRecyclerView.OnItemListener() {
             @Override
             public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {
@@ -93,29 +85,26 @@ public class GridFragment extends BaseLazyFragment {
             public void onItemClick(TvRecyclerView parent, View itemView, int position) { }
         });
 
-        // 长按整个网格（包括空白）跳转添加源
         mGridView.setOnLongClickListener(v -> {
             jumpToSetting();
             return true;
         });
 
-        // 点击频道 → 直接播放
         gridAdapter.setOnItemClickListener((adapter, view, position) -> {
             FastClickCheckUtil.check(view);
             Movie.Video video = gridAdapter.getData().get(position);
-            if (video != null && video.vodPlayUrl != null && !video.vodPlayUrl.isEmpty()) {
+            if (video != null && video.url != null && !video.url.isEmpty()) {
                 Bundle bundle = new Bundle();
                 bundle.putString("id", video.id);
                 bundle.putString("sourceKey", "built_in");
                 bundle.putString("title", video.name);
-                bundle.putString("url", video.vodPlayUrl);      // LivePlayActivity 常用参数
+                bundle.putString("url", video.url);  // LivePlayActivity 读取这个字段起播
                 jumpActivity(LivePlayActivity.class, bundle);
             } else {
                 Toast.makeText(mContext, "无效播放地址", Toast.LENGTH_SHORT).show();
             }
         });
 
-        // 长按频道也跳转添加源（统一体验）
         gridAdapter.setOnItemLongClickListener((adapter, view, position) -> {
             FastClickCheckUtil.check(view);
             jumpToSetting();
@@ -125,7 +114,6 @@ public class GridFragment extends BaseLazyFragment {
         gridAdapter.setLoadMoreView(new LoadMoreView());
         gridAdapter.setEnableLoadMore(false);
 
-        // 空状态视图：大字提示 + 可点击添加源
         TextView emptyTv = new TextView(mContext);
         emptyTv.setText("暂无直播频道\n\n长按遥控器任意键 或 点击这里\n添加/更新直播源");
         emptyTv.setTextColor(0xFFFFFFFF);
@@ -141,11 +129,8 @@ public class GridFragment extends BaseLazyFragment {
 
     private void jumpToSetting() {
         jumpActivity(SettingActivity.class);
-        // 如果想跳到具体“直播源” tab，可以加参数：
-        // Bundle b = new Bundle(); b.putString("tab", "live"); jumpActivity(SettingActivity.class, b);
     }
 
-    // 加载内置 TXT 直播源（name,url 格式）
     private void loadChannels() {
         new Thread(() -> {
             try {
@@ -169,9 +154,9 @@ public class GridFragment extends BaseLazyFragment {
                         v.name = parts[0].trim();
                         v.id = "live_" + index++;
                         v.sourceKey = "built_in";
-                        v.vodPlayUrl = parts[1].trim();
+                        v.url = parts[1].trim();  // ← 修正为 url
                         v.tag = "live";
-                        v.pic = "";  // 无需海报
+                        v.pic = "";
                         channels.add(v);
                     }
                 }
@@ -194,7 +179,6 @@ public class GridFragment extends BaseLazyFragment {
         }).start();
     }
 
-    // 手动刷新（后续设置添加源后可调用）
     public void forceRefresh() {
         gridAdapter.setNewData(null);
         loadChannels();
