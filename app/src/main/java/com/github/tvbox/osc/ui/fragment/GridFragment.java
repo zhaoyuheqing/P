@@ -13,10 +13,10 @@ import com.github.tvbox.osc.base.BaseLazyFragment;
 import com.github.tvbox.osc.ui.activity.LivePlayActivity;
 import com.github.tvbox.osc.ui.activity.SettingActivity;
 import com.github.tvbox.osc.ui.adapter.GridAdapter;
+import com.github.tvbox.osc.util.HawkConfig;
+import com.orhanobut.hawk.Hawk;
 import com.owen.tvrecyclerview.widget.TvRecyclerView;
 import com.owen.tvrecyclerview.widget.V7GridLayoutManager;
-
-import java.util.List;
 
 public class GridFragment extends BaseLazyFragment {
 
@@ -31,7 +31,7 @@ public class GridFragment extends BaseLazyFragment {
     }
 
     // 兼容 HomeActivity 原版调用（忽略 SortData 参数）
-    public static GridFragment newInstance(com.github.tvbox.osc.bean.MovieSort.SortData sortData) {
+    public static GridFragment newInstance(Object sortData) {
         return newInstance();
     }
 
@@ -76,7 +76,7 @@ public class GridFragment extends BaseLazyFragment {
         btnAddSource = new Button(requireContext());
         btnAddSource.setText("添加直播源");
         btnAddSource.setTextColor(0xFFFFFFFF);
-        btnAddSource.setBackgroundColor(0xFF3366CC);
+        btnAddSource.setBackgroundColor(0xFF3366CC); // 蓝色背景，避免 drawable 报错
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -89,7 +89,7 @@ public class GridFragment extends BaseLazyFragment {
         btnEnterLive = new Button(requireContext());
         btnEnterLive.setText("进入直播");
         btnEnterLive.setTextColor(0xFFFFFFFF);
-        btnEnterLive.setBackgroundColor(0xFF4CAF50);
+        btnEnterLive.setBackgroundColor(0xFF4CAF50); // 绿色背景
         params = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -113,6 +113,7 @@ public class GridFragment extends BaseLazyFragment {
     public void onResume() {
         super.onResume();
 
+        // 从设置返回后，检查是否保存了直播源 URL，并提示用户
         String liveUrl = Hawk.get(HawkConfig.LIVE_URL, "");
         if (liveUrl.isEmpty()) {
             Toast.makeText(requireContext(), "未检测到直播源地址，请在设置中添加", Toast.LENGTH_LONG).show();
