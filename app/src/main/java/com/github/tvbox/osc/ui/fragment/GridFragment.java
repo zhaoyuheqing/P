@@ -11,7 +11,6 @@ import android.widget.Toast;
 import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.api.ApiConfig;
 import com.github.tvbox.osc.base.BaseLazyFragment;
-import com.github.tvbox.osc.bean.LiveChannelGroup;
 import com.github.tvbox.osc.ui.activity.LivePlayActivity;
 import com.github.tvbox.osc.ui.activity.SettingActivity;
 import com.github.tvbox.osc.ui.adapter.GridAdapter;
@@ -32,11 +31,6 @@ public class GridFragment extends BaseLazyFragment {
 
     public static GridFragment newInstance() {
         return new GridFragment();
-    }
-
-    // 兼容 HomeActivity 原版调用（忽略 SortData 参数）
-    public static GridFragment newInstance(Object sortData) {
-        return newInstance();
     }
 
     @Override
@@ -98,22 +92,19 @@ public class GridFragment extends BaseLazyFragment {
         );
         params.topMargin = 20;
         btnEnterLive.setLayoutParams(params);
-        btnEnterLive.setOnClickListener(v -> jumpActivity(LivePlayActivity.class));
+        btnEnterLive.setOnClickListener(v -> {
+            jumpActivity(LivePlayActivity.class);
+        });
         emptyLayout.addView(btnEnterLive);
 
         gridAdapter.setEmptyView(emptyLayout);
     }
 
     private void updateUIState() {
-        List<LiveChannelGroup> groups = ApiConfig.get().getChannelGroupList();
-        if (groups != null && !groups.isEmpty()) {
-            btnAddSource.setVisibility(View.GONE);
-            btnEnterLive.setVisibility(View.VISIBLE);
-            btnEnterLive.requestFocus();
-        } else {
-            btnAddSource.setVisibility(View.VISIBLE);
-            btnEnterLive.setVisibility(View.GONE);
-        }
+        // 始终显示“进入直播”按钮，让 LivePlayActivity 自己处理源
+        btnAddSource.setVisibility(View.VISIBLE);
+        btnEnterLive.setVisibility(View.VISIBLE);
+        btnEnterLive.requestFocus();
     }
 
     @Override
@@ -127,7 +118,7 @@ public class GridFragment extends BaseLazyFragment {
             if (liveUrl.isEmpty()) {
                 msg = "未检测到直播源地址，请在设置中添加";
             } else {
-                msg = "已检测到直播源地址：" + liveUrl + "\n请进入直播查看频道";
+                msg = "已检测到直播源地址：" + liveUrl + "\n请点击“进入直播”查看频道（自动解析）";
             }
 
             requireActivity().runOnUiThread(() -> {
