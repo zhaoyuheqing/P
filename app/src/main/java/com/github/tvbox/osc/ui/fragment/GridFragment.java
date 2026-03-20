@@ -28,6 +28,8 @@ public class GridFragment extends BaseLazyFragment {
     private LinearLayout emptyLayout;
     private Button btnAddSource;
     private Button btnEnterLive;
+    private Handler autoEnterHandler = new Handler(Looper.getMainLooper());
+    private Runnable autoEnterRunnable;
 
     public static GridFragment newInstance() {
         return new GridFragment();
@@ -83,15 +85,15 @@ public class GridFragment extends BaseLazyFragment {
         btnEnterLive.setOnClickListener(v -> enterLive());
         emptyLayout.addView(btnEnterLive);
 
-        // 重要：把 emptyLayout 添加到 Fragment 根视图（假设 fragment_grid.xml 是空容器）
+        // 把 emptyLayout 添加到 Fragment 视图（假设 fragment_grid.xml 是空容器）
         View root = getView();
         if (root instanceof ViewGroup) {
-            ((ViewGroup) root).removeAllViews(); // 清空原有内容
+            ((ViewGroup) root).removeAllViews();
             ((ViewGroup) root).addView(emptyLayout);
         }
     }
 
-    // ==================== 核心：手动包装 + 初始化 IJK 配置 ====================
+    // ==================== 核心：手动包装 + 进入直播 ====================
     private void enterLive() {
         String liveUrl = Hawk.get(HawkConfig.LIVE_URL, "").trim();
         if (liveUrl.isEmpty()) {
@@ -113,43 +115,19 @@ public class GridFragment extends BaseLazyFragment {
             group.setLiveChannels(new ArrayList<>());
             apiConfig.getChannelGroupList().add(group);
 
-            // ==================== 修复 NPE：确保 IJK 已初始化 ====================
-            if (apiConfig.getIjkCodes() == null || apiConfig.getIjkCodes().isEmpty()) {
-                apiConfig.loadConfig(false, new ApiConfig.LoadConfigCallback() {
-                    @Override
-                    public void success() {
-                        jumpToLive();
-                    }
-
-                    @Override
-                    public void error(String msg) {
-                        Toast.makeText(requireContext(), "IJK 初始化失败: " + msg, Toast.LENGTH_LONG).show();
-                        jumpToLive(); // 失败也尝试进入
-                    }
-
-                    @Override
-                    public void retry() {
-                        // 忽略或重试
-                    }
-                }, requireActivity());
-            } else {
-                jumpToLive();
-            }
-
             Toast.makeText(requireContext(), "直播源已包装，即将进入播放...", Toast.LENGTH_SHORT).show();
+
+            // 延迟跳转，确保列表更新
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                startActivity(new Intent(requireContext(), LivePlayActivity.class));
+            }, 400);
 
         } catch (Exception e) {
             Toast.makeText(requireContext(), "包装失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
-    private void jumpToLive() {
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            startActivity(new Intent(requireContext(), LivePlayActivity.class));
-        }, 400);
-    }
-
-    // 点击整个屏幕跳转设置
+    // 点击屏幕任意位置跳转设置
     @Override
     public void onViewCreated(View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
@@ -163,11 +141,28 @@ public class GridFragment extends BaseLazyFragment {
     public void onResume() {
         super.onResume();
 
-        String liveUrl = Hawk.get(HawkConfig.LIVE_URL, "");
+        String liveUrl = Hawk.get(HawkConfig.LIVE_URL, "").trim();
         if (liveUrl.isEmpty()) {
             Toast.makeText(requireContext(), "未检测到直播源\n点击屏幕任意位置添加", Toast.LENGTH_LONG).show();
+            // 取消自动进入（如果有定时器）
+            if (autoEnterRunnable != null) {
+                autoEnterHandler.removeCallbacks(autoEnterRunnable);
+            }
         } else {
-            Toast.makeText(requireContext(), "直播源已保存\n点击“进入直播”开始播放", Toast.LENGTH_LONG).show();
+            Toast.makeText(requireContext(), "直播源已保存\n3秒后自动进入直播（或点击按钮立即进入）", Toast.LENGTH_LONG).show();
+
+            // 启动自动进入定时器（3秒后自动跳转）
+            autoEnterRunnable = () -> enterLive();
+            autoEnterHandler.postDelayed(autoEnterRunnable, 3000);  // 3000ms = 3秒，可改成5000为5秒
+        }
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        // 离开页面时取消自动进入定时器，避免意外跳转
+        if (autoEnterRunnable != null) {
+            autoEnterHandler.removeCallbacks(autoEnterRunnable);
         }
     }
 }
