@@ -83,7 +83,7 @@ public class HomeActivity extends BaseActivity {
     // 核心：开机直接进入直播（不等待源）
     private void loadLiveChannelList() {
         getSupportFragmentManager().beginTransaction()
-                .replace(R.id.container, GridFragment.newInstance(getLiveSortData()))
+                .replace(R.id.container, GridFragment.newInstance())
                 .commitAllowingStateLoss();
     }
 
