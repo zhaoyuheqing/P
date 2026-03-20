@@ -1,6 +1,7 @@
 package com.github.tvbox.osc.ui.fragment;
 
 import android.os.Bundle;
+import android.util.Base64;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
@@ -9,7 +10,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.github.tvbox.osc.R;
+import com.github.tvbox.osc.api.ApiConfig;
 import com.github.tvbox.osc.base.BaseLazyFragment;
+import com.github.tvbox.osc.bean.LiveChannelGroup;
 import com.github.tvbox.osc.ui.activity.LivePlayActivity;
 import com.github.tvbox.osc.ui.activity.SettingActivity;
 import com.github.tvbox.osc.ui.adapter.GridAdapter;
@@ -30,7 +33,7 @@ public class GridFragment extends BaseLazyFragment {
         return new GridFragment();
     }
 
-    // 兼容 HomeActivity 原版调用（关键！解决你之前所有 newInstance 报错）
+    // 兼容 HomeActivity 原版调用（关键修复之前报错）
     public static GridFragment newInstance(Object sortData) {
         return newInstance();
     }
@@ -76,7 +79,9 @@ public class GridFragment extends BaseLazyFragment {
         btnAddSource.setTextColor(0xFFFFFFFF);
         btnAddSource.setBackgroundColor(0xFF3366CC);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
         params.topMargin = 40;
         btnAddSource.setLayoutParams(params);
         btnAddSource.setOnClickListener(v -> jumpActivity(SettingActivity.class));
@@ -87,7 +92,9 @@ public class GridFragment extends BaseLazyFragment {
         btnEnterLive.setTextColor(0xFFFFFFFF);
         btnEnterLive.setBackgroundColor(0xFF4CAF50);
         params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
         params.topMargin = 20;
         btnEnterLive.setLayoutParams(params);
         btnEnterLive.setOnClickListener(v -> jumpActivity(LivePlayActivity.class));
@@ -109,10 +116,27 @@ public class GridFragment extends BaseLazyFragment {
         String liveUrl = Hawk.get(HawkConfig.LIVE_URL, "");
         if (liveUrl.isEmpty()) {
             Toast.makeText(requireContext(), "未检测到直播源地址，请在设置中添加", Toast.LENGTH_LONG).show();
-        } else {
-            Toast.makeText(requireContext(), "已保存直播源：" + liveUrl + "\n点击“进入直播”查看频道", Toast.LENGTH_LONG).show();
-            // 关键：直接跳转 LivePlayActivity，让它执行 loadProxyLives → 下载TXT → loadLives
+            updateUIState();
+            return;
+        }
+
+        // 手动模拟 ApiConfig.parseJson 里的包装逻辑（核心修复）
+        try {
+            String base64Url = Base64.encodeToString(liveUrl.getBytes("UTF-8"), Base64.DEFAULT | Base64.URL_SAFE | Base64.NO_WRAP);
+            String proxyUrl = "http://127.0.0.1:9978/proxy?do=live&type=txt&ext=" + base64Url.trim();
+
+            // 清空旧列表并添加 proxy 虚拟分组（模拟 parseJson）
+            ApiConfig.get().getChannelGroupList().clear();
+            LiveChannelGroup fakeGroup = new LiveChannelGroup();
+            fakeGroup.setGroupName(proxyUrl);
+            ApiConfig.get().getChannelGroupList().add(fakeGroup);
+
+            Toast.makeText(requireContext(), "已包装直播源：" + proxyUrl + "\n即将进入直播查看频道", Toast.LENGTH_LONG).show();
+
+            // 直接跳转 LivePlayActivity，让它执行 loadProxyLives → OkGo下载TXT → TxtSubscribe → loadLives → 显示
             jumpActivity(LivePlayActivity.class);
+        } catch (Exception e) {
+            Toast.makeText(requireContext(), "包装源地址失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
         }
 
         updateUIState();
