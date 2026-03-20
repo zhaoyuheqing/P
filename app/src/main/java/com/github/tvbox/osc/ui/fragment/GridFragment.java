@@ -29,8 +29,6 @@ public class GridFragment extends BaseLazyFragment {
     private LinearLayout emptyLayout;
     private Button btnAddSource;
     private Button btnEnterLive;
-    private Handler autoEnterHandler = new Handler(Looper.getMainLooper());
-    private Runnable autoEnterRunnable;
 
     public static GridFragment newInstance() {
         return new GridFragment();
@@ -86,7 +84,7 @@ public class GridFragment extends BaseLazyFragment {
         btnEnterLive.setOnClickListener(v -> enterLive());
         emptyLayout.addView(btnEnterLive);
 
-        // 添加 emptyLayout 到根视图
+        // 将 emptyLayout 添加到 Fragment 根视图（兼容空布局）
         View root = getView();
         if (root instanceof ViewGroup) {
             ((ViewGroup) root).removeAllViews();
@@ -94,7 +92,7 @@ public class GridFragment extends BaseLazyFragment {
         }
     }
 
-    // ==================== 核心修复：完整触发 loadConfig → parseJson ====================
+    // ==================== 核心：loadConfig + success 回调手动确认包装 ====================
     private void enterLive() {
         String liveUrl = Hawk.get(HawkConfig.LIVE_URL, "").trim();
         if (liveUrl.isEmpty()) {
@@ -105,31 +103,76 @@ public class GridFragment extends BaseLazyFragment {
 
         ApiConfig apiConfig = ApiConfig.get();
 
-        // 关键：主动调用 loadConfig，确保 parseJson 完整执行（IJK + proxy 包装 + 其他初始化）
+        // 主动调用 loadConfig，确保 parseJson 完整执行
         apiConfig.loadConfig(false, new ApiConfig.LoadConfigCallback() {
             @Override
             public void success() {
-                Toast.makeText(requireContext(), "源配置已初始化，即将进入播放...", Toast.LENGTH_SHORT).show();
+                // success 回调：parseJson 已执行
+                // 手动确认/强制包装（防止 parseJson 没读到 LIVE_URL 或分组丢失）
+                if (apiConfig.getChannelGroupList().isEmpty() ||
+                    !apiConfig.getChannelGroupList().get(0).getGroupName().startsWith("http://127.0.0.1")) {
+                    
+                    try {
+                        String base64 = Base64.encodeToString(liveUrl.getBytes("UTF-8"),
+                                Base64.DEFAULT | Base64.URL_SAFE | Base64.NO_WRAP);
+                        String proxyUrl = "http://127.0.0.1:9978/proxy?do=live&type=txt&ext=" + base64.trim();
 
-                // 延迟跳转，确保 parseJson 完成
+                        apiConfig.getChannelGroupList().clear();
+                        LiveChannelGroup group = new LiveChannelGroup();
+                        group.setGroupName(proxyUrl);
+                        group.setLiveChannels(new ArrayList<>());
+                        apiConfig.getChannelGroupList().add(group);
+
+                        Toast.makeText(requireContext(), "已手动确认包装直播源", Toast.LENGTH_SHORT).show();
+                    } catch (Exception ignored) {}
+                }
+
+                Toast.makeText(requireContext(), "源配置初始化成功，3秒后进入直播...", Toast.LENGTH_SHORT).show();
+
+                // 增加到 3 秒延迟，确保所有异步初始化完成
                 new Handler(Looper.getMainLooper()).postDelayed(() -> {
                     startActivity(new Intent(requireContext(), LivePlayActivity.class));
-                }, 500);
+                }, 3000);
             }
 
             @Override
             public void error(String msg) {
-                Toast.makeText(requireContext(), "源初始化失败: " + msg + "\n仍尝试进入直播", Toast.LENGTH_LONG).show();
-                // 失败也尝试进入（容错）
-                startActivity(new Intent(requireContext(), LivePlayActivity.class));
+                Toast.makeText(requireContext(), "配置文件加载失败: " + msg, Toast.LENGTH_LONG).show();
+                // fallback 手动包装
+                manualProxyFallback(liveUrl);
             }
 
             @Override
             public void retry() {
-                // 可重试一次
+                // 重试一次
                 new Handler(Looper.getMainLooper()).postDelayed(() -> enterLive(), 2000);
             }
         }, requireActivity());
+    }
+
+    // fallback：配置文件失败时手动包装
+    private void manualProxyFallback(String liveUrl) {
+        try {
+            String base64 = Base64.encodeToString(liveUrl.getBytes("UTF-8"),
+                    Base64.DEFAULT | Base64.URL_SAFE | Base64.NO_WRAP);
+            String proxyUrl = "http://127.0.0.1:9978/proxy?do=live&type=txt&ext=" + base64.trim();
+
+            ApiConfig apiConfig = ApiConfig.get();
+            apiConfig.getChannelGroupList().clear();
+
+            LiveChannelGroup group = new LiveChannelGroup();
+            group.setGroupName(proxyUrl);
+            group.setLiveChannels(new ArrayList<>());
+            apiConfig.getChannelGroupList().add(group);
+
+            Toast.makeText(requireContext(), "配置文件失败，已手动包装直播源，3秒后尝试进入", Toast.LENGTH_LONG).show();
+
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                startActivity(new Intent(requireContext(), LivePlayActivity.class));
+            }, 3000);
+        } catch (Exception e) {
+            Toast.makeText(requireContext(), "手动包装失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 
     // 点击屏幕任意位置跳转设置
@@ -149,22 +192,9 @@ public class GridFragment extends BaseLazyFragment {
         String liveUrl = Hawk.get(HawkConfig.LIVE_URL, "").trim();
         if (liveUrl.isEmpty()) {
             Toast.makeText(requireContext(), "未检测到直播源\n点击屏幕任意位置添加", Toast.LENGTH_LONG).show();
-            if (autoEnterRunnable != null) {
-                autoEnterHandler.removeCallbacks(autoEnterRunnable);
-            }
         } else {
-            Toast.makeText(requireContext(), "直播源已保存\n3秒后自动进入直播（或点击按钮立即进入）", Toast.LENGTH_LONG).show();
-
-            autoEnterRunnable = this::enterLive;
-            autoEnterHandler.postDelayed(autoEnterRunnable, 3000);
-        }
-    }
-
-    @Override
-    public void onPause() {
-        super.onPause();
-        if (autoEnterRunnable != null) {
-            autoEnterHandler.removeCallbacks(autoEnterRunnable);
+            Toast.makeText(requireContext(), "直播源已保存\n点击“进入直播”或等待自动加载", Toast.LENGTH_LONG).show();
+            // 已取消 3 秒自动进入，只在按钮点击时触发
         }
     }
 }
