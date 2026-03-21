@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Base64;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,10 +16,13 @@ import android.widget.Toast;
 import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.api.ApiConfig;
 import com.github.tvbox.osc.base.BaseLazyFragment;
+import com.github.tvbox.osc.bean.LiveChannelGroup;
 import com.github.tvbox.osc.ui.activity.LivePlayActivity;
 import com.github.tvbox.osc.ui.activity.SettingActivity;
 import com.github.tvbox.osc.util.HawkConfig;
 import com.orhanobut.hawk.Hawk;
+
+import java.util.ArrayList;
 
 public class GridFragment extends BaseLazyFragment {
 
@@ -87,7 +91,7 @@ public class GridFragment extends BaseLazyFragment {
         }
     }
 
-    // ==================== 核心：只依赖 loadConfig + success 回调延迟跳转 ====================
+    // ==================== 核心：生成占位分组，让 LivePlayActivity 自动调用 loadProxyLives ====================
     private void enterLive() {
         String liveUrl = Hawk.get(HawkConfig.LIVE_URL, "").trim();
         if (liveUrl.isEmpty()) {
@@ -96,33 +100,33 @@ public class GridFragment extends BaseLazyFragment {
             return;
         }
 
-        ApiConfig apiConfig = ApiConfig.get();
+        try {
+            // 生成和原版完全一致的 proxyUrl
+            String base64 = Base64.encodeToString(liveUrl.getBytes("UTF-8"),
+                    Base64.DEFAULT | Base64.URL_SAFE | Base64.NO_WRAP);
+            String proxyUrl = "http://127.0.0.1:9978/proxy?do=live&type=txt&ext=" + base64;
 
-        apiConfig.loadConfig(false, new ApiConfig.LoadConfigCallback() {
-            @Override
-            public void success() {
-                // parseJson 已完整执行，无需手动包装
-                Toast.makeText(requireContext(), "源配置初始化成功，3秒后进入直播...", Toast.LENGTH_SHORT).show();
+            // 清空旧列表，并添加一个符合 LivePlayActivity 判断条件的占位分组
+            ApiConfig apiConfig = ApiConfig.get();
+            apiConfig.getChannelGroupList().clear();
 
-                new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                    startActivity(new Intent(requireContext(), LivePlayActivity.class));
-                }, 3000);
-            }
+            LiveChannelGroup group = new LiveChannelGroup();
+            group.setGroupName(proxyUrl);
+            group.setLiveChannels(new ArrayList<>());   // 必须加这行
+            apiConfig.getChannelGroupList().add(group);
 
-            @Override
-            public void error(String msg) {
-                Toast.makeText(requireContext(), "配置文件加载失败: " + msg, Toast.LENGTH_LONG).show();
-                // 失败时提示，但不跳转（避免空列表崩溃）
-            }
+            Toast.makeText(requireContext(), "直播源已准备，即将进入播放...", Toast.LENGTH_SHORT).show();
 
-            @Override
-            public void retry() {
-                new Handler(Looper.getMainLooper()).postDelayed(() -> enterLive(), 2000);
-            }
-        }, requireActivity());
+            // 跳转 LivePlayActivity，让它自己去判断并调用 loadProxyLives
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                startActivity(new Intent(requireContext(), LivePlayActivity.class));
+            }, 500);
+
+        } catch (Exception e) {
+            Toast.makeText(requireContext(), "准备失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 
-    // 点击屏幕任意位置跳转设置
     @Override
     public void onViewCreated(View view, Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
