@@ -10,7 +10,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1  # 只取最新 commit，够用且更快
+          fetch-depth: 1
 
       - name: Cache Gradle dependencies
         uses: actions/cache@v4
@@ -42,45 +42,55 @@ jobs:
             --configure-on-demand \
             --max-workers=4 \
             --stacktrace \
-            --info > compile_log.txt 2>&1 || true   # 失败也继续执行下一步
+            --info > compile_log.txt 2>&1
 
-      - name: Print APK locations (always)
-        if: always()
+      - name: Find and rename APK (only on success)
+        if: success()
         run: |
-          echo "======================================"
-          echo "寻找所有生成的 .apk 文件："
-          find app/build/outputs -type f -name "*.apk" -exec ls -lh {} \; || echo "未找到 APK"
-          echo ""
-          echo "outputs/apk 目录完整结构："
-          ls -laR app/build/outputs/apk 2>/dev/null || echo "目录不存在"
-          echo "======================================"
+          APK_PATH=$(find app/build/outputs -type f -name "*arm64*.apk" | head -n 1)
+          if [ -f "$APK_PATH" ]; then
+            mv "$APK_PATH" TVBox-LiveOnly-debug-arm64.apk
+            echo "APK renamed and ready for upload"
+            ls -lh TVBox-LiveOnly-debug-arm64.apk
+          else
+            echo "APK not found even though build reports success"
+            exit 1
+          fi
 
-      - name: Show Build Log Summary (always, but highlight errors)
-        if: always()
+      - name: Generate error summary log (only on failure)
+        if: failure()
         run: |
-          echo "=== BUILD LOG SUMMARY ==="
-          echo ""
-          echo "1. 所有包含 'error:' 的行（编译错误）："
-          grep -i -C 5 "error:" compile_log.txt | head -n 150 || echo "未找到 error: 行"
-          echo ""
-          echo "2. 失败的任务上下文（Failed task）："
-          grep -B 15 -A 30 "Execution failed for task" compile_log.txt || echo "未找到失败任务"
-          echo ""
-          echo "3. 与核心文件相关的错误（LivePlayActivity / ApiConfig）："
-          grep -i -C 8 "LivePlayActivity.java\|ApiConfig.java" compile_log.txt || echo "未找到相关文件错误"
-          echo ""
-          echo "4. 最后 300 行日志（通常包含最终原因）："
-          tail -n 300 compile_log.txt
-          echo ""
-          echo "=== SUMMARY END ==="
+          echo "=== BUILD FAILED - ERROR SUMMARY ===" > build-log-error-summary.txt
+          echo "" >> build-log-error-summary.txt
+          echo "Build date: $(date '+%Y-%m-%d %H:%M:%S UTC')" >> build-log-error-summary.txt
+          echo "" >> build-log-error-summary.txt
+          
+          echo "1. Lines containing 'error:' (with context)" >> build-log-error-summary.txt
+          grep -i -C 5 "error:" compile_log.txt >> build-log-error-summary.txt 2>/dev/null || echo "No 'error:' lines found" >> build-log-error-summary.txt
+          echo "" >> build-log-error-summary.txt
+          
+          echo "2. Failed task information" >> build-log-error-summary.txt
+          grep -B 10 -A 30 "Execution failed for task" compile_log.txt >> build-log-error-summary.txt 2>/dev/null || echo "No failed task messages found" >> build-log-error-summary.txt
+          echo "" >> build-log-error-summary.txt
+          
+          echo "3. Errors related to key files (LivePlayActivity / ApiConfig / Live)" >> build-log-error-summary.txt
+          grep -i -C 8 "LivePlayActivity.java\|ApiConfig.java\|Live" compile_log.txt >> build-log-error-summary.txt 2>/dev/null || echo "No matches in key files" >> build-log-error-summary.txt
+          echo "" >> build-log-error-summary.txt
+          
+          echo "4. Last 400 lines of build log (most important part)" >> build-log-error-summary.txt
+          tail -n 400 compile_log.txt >> build-log-error-summary.txt 2>/dev/null
+          echo "" >> build-log-error-summary.txt
+          echo "=== END OF ERROR SUMMARY ===" >> build-log-error-summary.txt
 
-      - name: Upload debug APK
-        if: success() || failure()  # 即使失败也尝试上传日志相关文件
+      - name: Upload artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: TVBox-LiveOnly-debug-arm64
           path: |
-            app/build/outputs/**/*.apk
-            compile_log.txt
+            TVBox-LiveOnly-debug-arm64.apk
+            build-log-error-summary.txt
+            compile_log.txt   # 可选：保留完整日志供调试，生产环境可删除此行
           if-no-files-found: warn
           retention-days: 7
+          compression-level: 6
