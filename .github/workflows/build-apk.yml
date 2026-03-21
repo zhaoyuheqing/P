@@ -50,37 +50,70 @@ jobs:
           APK_PATH=$(find app/build/outputs -type f -name "*arm64*.apk" | head -n 1)
           if [ -f "$APK_PATH" ]; then
             mv "$APK_PATH" TVBox-LiveOnly-debug-arm64.apk
-            echo "APK renamed and ready for upload"
+            echo "APK renamed and ready for upload:"
             ls -lh TVBox-LiveOnly-debug-arm64.apk
           else
             echo "APK not found even though build reports success"
             exit 1
           fi
 
-      - name: Generate error summary log (only on failure)
+      - name: On failure - Print critical errors to console & generate summary file
         if: failure()
         run: |
-          echo "=== BUILD FAILED - ERROR SUMMARY ===" > build-log-error-summary.txt
-          echo "" >> build-log-error-summary.txt
-          echo "Build date: $(date '+%Y-%m-%d %H:%M:%S UTC')" >> build-log-error-summary.txt
-          echo "" >> build-log-error-summary.txt
-          
-          echo "1. Lines containing 'error:' (with context)" >> build-log-error-summary.txt
-          grep -i -C 5 "error:" compile_log.txt >> build-log-error-summary.txt 2>/dev/null || echo "No 'error:' lines found" >> build-log-error-summary.txt
-          echo "" >> build-log-error-summary.txt
-          
-          echo "2. Failed task information" >> build-log-error-summary.txt
-          grep -B 10 -A 30 "Execution failed for task" compile_log.txt >> build-log-error-summary.txt 2>/dev/null || echo "No failed task messages found" >> build-log-error-summary.txt
-          echo "" >> build-log-error-summary.txt
-          
-          echo "3. Errors related to key files (LivePlayActivity / ApiConfig / Live)" >> build-log-error-summary.txt
-          grep -i -C 8 "LivePlayActivity.java\|ApiConfig.java\|Live" compile_log.txt >> build-log-error-summary.txt 2>/dev/null || echo "No matches in key files" >> build-log-error-summary.txt
-          echo "" >> build-log-error-summary.txt
-          
-          echo "4. Last 400 lines of build log (most important part)" >> build-log-error-summary.txt
-          tail -n 400 compile_log.txt >> build-log-error-summary.txt 2>/dev/null
-          echo "" >> build-log-error-summary.txt
-          echo "=== END OF ERROR SUMMARY ===" >> build-log-error-summary.txt
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🚨 BUILD FAILED - CRITICAL ERROR SUMMARY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+          echo "Build time: $(date '+%Y-%m-%d %H:%M:%S UTC')"
+          echo ""
+
+          echo "1. Lines containing 'error:' (±5 lines context)"
+          echo "---------------------------------------------"
+          grep -i -C 5 "error:" compile_log.txt || echo "(no 'error:' lines found)"
+          echo ""
+
+          echo "2. Failed task information"
+          echo "-------------------------"
+          grep -B 10 -A 30 "Execution failed for task" compile_log.txt || echo "(no failed task messages found)"
+          echo ""
+
+          echo "3. Errors related to key files (LivePlayActivity / ApiConfig / Live)"
+          echo "---------------------------------------------------------------"
+          grep -i -C 8 "LivePlayActivity.java\|ApiConfig.java\|Live" compile_log.txt || echo "(no matches in key files)"
+          echo ""
+
+          echo "4. Last 200 lines of build log (quick view)"
+          echo "------------------------------------------"
+          echo "(full 400 lines saved in artifact)"
+          tail -n 200 compile_log.txt
+          echo ""
+
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Full details saved → build-log-error-summary.txt"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+
+          # 生成供下载的完整版文件
+          {
+            echo "=== BUILD FAILED - FULL ERROR SUMMARY ==="
+            echo "Build date: $(date '+%Y-%m-%d %H:%M:%S UTC')"
+            echo ""
+            echo "1. Lines containing 'error:' (with ±5 lines context)"
+            grep -i -C 5 "error:" compile_log.txt 2>/dev/null || echo "No 'error:' lines found"
+            echo ""
+            echo "2. Failed task information"
+            grep -B 10 -A 30 "Execution failed for task" compile_log.txt 2>/dev/null || echo "No failed task messages found"
+            echo ""
+            echo "3. Errors related to key files (LivePlayActivity / ApiConfig / Live)"
+            grep -i -C 8 "LivePlayActivity.java\|ApiConfig.java\|Live" compile_log.txt 2>/dev/null || echo "No matches in key files"
+            echo ""
+            echo "4. Last 400 lines of build log (most important part)"
+            tail -n 400 compile_log.txt
+            echo ""
+            echo "=== END OF ERROR SUMMARY ==="
+          } > build-log-error-summary.txt
 
       - name: Upload artifacts
         if: always()
@@ -90,7 +123,6 @@ jobs:
           path: |
             TVBox-LiveOnly-debug-arm64.apk
             build-log-error-summary.txt
-            compile_log.txt   # 可选：保留完整日志供调试，生产环境可删除此行
+            # compile_log.txt     # 调试时可临时打开，生产环境建议注释掉以减少上传体积
           if-no-files-found: warn
           retention-days: 7
-          compression-level: 6
