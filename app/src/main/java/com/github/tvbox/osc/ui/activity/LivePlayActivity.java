@@ -1794,11 +1794,17 @@ public class LivePlayActivity extends BaseActivity {
             }
 
             @Override
-            public void onError(Response<String> response) {
-                super.onError(response);
-                Toast.makeText(App.getInstance(), getString(R.string.act_live_play_network_error), Toast.LENGTH_LONG).show();
-                finish();
-            }
+public void onError(Response<String> response) {
+    super.onError(response);
+    Toast.makeText(App.getInstance(), "无法访问直播源（网络或地址问题）", Toast.LENGTH_LONG).show();
+    
+    // 修改：不 finish()，改为显示空状态界面
+    liveChannelGroupList.clear();
+    showSuccess();
+    initLiveState();
+    
+    // 可选：显示更明显的空提示（如果已添加 tvEmptyTip，可调用 showEmptyTip()）
+}
         });
     }
 
