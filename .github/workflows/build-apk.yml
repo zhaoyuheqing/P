@@ -1,7 +1,6 @@
-name: Build TVBox APK - Single Debug Variant (arm64 generic normal debug)
+name: Build TVBox LiveOnly Debug (arm64)
 
-on:
-  workflow_dispatch:
+on: [workflow_dispatch]
 
 jobs:
   build:
@@ -11,7 +10,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1  # 只取最新 commit，够用且更快
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -23,51 +31,56 @@ jobs:
         run: chmod +x gradlew
 
       - name: Clean previous builds
-        run: ./gradlew clean
+        run: ./gradlew clean --no-daemon
 
-      # 构建 debug 版，保存完整日志（失败时 workflow 会停止）
-      - name: Assemble single debug variant
-        run: ./gradlew assembleArm64GenericNormalDebug --stacktrace --info --debug > compile_log.txt 2>&1
+      - name: Build arm64 debug (optimized)
+        id: build_step
+        run: |
+          ./gradlew assembleArm64GenericNormalDebug \
+            --no-daemon \
+            --parallel \
+            --configure-on-demand \
+            --max-workers=4 \
+            --stacktrace \
+            --info > compile_log.txt 2>&1 || true   # 失败也继续执行下一步
 
-      # 打印所有生成的 APK 文件路径（用于确认位置）
-      - name: Print all generated APK locations
+      - name: Print APK locations (always)
         if: always()
         run: |
           echo "======================================"
-          echo "寻找所有 .apk 文件（完整路径）："
-          find app/build/outputs -type f -name "*.apk" 2>/dev/null || echo "未找到任何 .apk 文件"
+          echo "寻找所有生成的 .apk 文件："
+          find app/build/outputs -type f -name "*.apk" -exec ls -lh {} \; || echo "未找到 APK"
           echo ""
-          echo "======================================"
-          echo "outputs/apk 目录结构："
-          ls -laR app/build/outputs/apk 2>/dev/null || echo "目录不存在或为空"
+          echo "outputs/apk 目录完整结构："
+          ls -laR app/build/outputs/apk 2>/dev/null || echo "目录不存在"
           echo "======================================"
 
-      # 失败时打印关键错误信息（现在会正常触发）
-      - name: Extract & Print Compile Errors (on failure)
-        if: failure()
+      - name: Show Build Log Summary (always, but highlight errors)
+        if: always()
         run: |
-          echo "=== BUILD FAILED - ERROR SUMMARY (copy all below to Grok) ==="
+          echo "=== BUILD LOG SUMMARY ==="
           echo ""
-          echo "1. All lines containing 'error:' (javac compilation errors):"
-          grep -i -B 5 -A 30 "error:" compile_log.txt | head -n 100 || echo "No 'error:' lines found"
+          echo "1. 所有包含 'error:' 的行（编译错误）："
+          grep -i -C 5 "error:" compile_log.txt | head -n 150 || echo "未找到 error: 行"
           echo ""
-          echo "2. Failed task context:"
-          grep -B 10 -A 30 "failed for task" compile_log.txt || echo "No failed task found"
+          echo "2. 失败的任务上下文（Failed task）："
+          grep -B 15 -A 30 "Execution failed for task" compile_log.txt || echo "未找到失败任务"
           echo ""
-          echo "3. Errors related to HomeActivity.java:"
-          grep -i -B 5 -A 30 "HomeActivity.java" compile_log.txt || echo "No HomeActivity errors found"
+          echo "3. 与核心文件相关的错误（LivePlayActivity / ApiConfig）："
+          grep -i -C 8 "LivePlayActivity.java\|ApiConfig.java" compile_log.txt || echo "未找到相关文件错误"
           echo ""
-          echo "4. Last 200 lines of log (errors usually here):"
-          tail -n 200 compile_log.txt
+          echo "4. 最后 300 行日志（通常包含最终原因）："
+          tail -n 300 compile_log.txt
           echo ""
-          echo "=== END OF ERROR SUMMARY ==="
+          echo "=== SUMMARY END ==="
 
-      # 递归上传 APK（成功时有效）
-      - name: Upload debug APK (recursive search)
+      - name: Upload debug APK
+        if: success() || failure()  # 即使失败也尝试上传日志相关文件
         uses: actions/upload-artifact@v4
         with:
-          name: TVBox-debug-arm64-generic-normal
-          path: app/build/outputs/**/*.apk
+          name: TVBox-LiveOnly-debug-arm64
+          path: |
+            app/build/outputs/**/*.apk
+            compile_log.txt
           if-no-files-found: warn
           retention-days: 7
-          compression-level: 6
