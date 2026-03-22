@@ -174,6 +174,10 @@ public class LivePlayActivity extends BaseActivity {
     private boolean isSHIYI = false;
     private static String shiyi_time;//时移时间
 
+    // 临时变量，用于无源时保存用户选择
+    private int tempPlayerScale = -1;
+    private int tempPlayerType = -1;
+
     private HashMap<String, String> setPlayHeaders(String url) {
         HashMap<String, String> header = new HashMap();
         try {
@@ -331,7 +335,7 @@ public class LivePlayActivity extends BaseActivity {
         });
     }
 
-    // 新增：创建空占位数据
+    // 创建空占位数据
     private void createEmptyPlaceholder() {
         liveChannelGroupList.clear();
         
@@ -933,6 +937,19 @@ public class LivePlayActivity extends BaseActivity {
         }
         channel_Name = currentLiveChannelItem;
         currentLiveChannelItem.setinclude_back(currentLiveChannelItem.getUrl().indexOf("PLTV/8888") != -1);
+
+        // 如果有临时保存的设置，在播放前应用到 LivePlayerManager
+        if (tempPlayerScale != -1 && currentLiveChannelItem != null) {
+            livePlayerManager.changeLivePlayerScale(mVideoView, tempPlayerScale, currentLiveChannelItem.getChannelName());
+            tempPlayerScale = -1;
+        }
+        if (tempPlayerType != -1 && currentLiveChannelItem != null) {
+            mVideoView.release();
+            livePlayerManager.changeLivePlayerType(mVideoView, tempPlayerType, currentLiveChannelItem.getChannelName());
+            mVideoView.setUrl(currentLiveChannelItem.getUrl(), setPlayHeaders(currentLiveChannelItem.getUrl()));
+            mVideoView.start();
+            tempPlayerType = -1;
+        }
 
         mHandler.post(tv_sys_timeRunnable);
 
@@ -1536,7 +1553,6 @@ public class LivePlayActivity extends BaseActivity {
         });
     }
 
-    // 修改 selectSettingGroup 方法 - 添加无源时的保护
     private void selectSettingGroup(int position, boolean focus) {
         if (focus) {
             liveSettingGroupAdapter.setFocusedGroupIndex(position);
@@ -1553,30 +1569,47 @@ public class LivePlayActivity extends BaseActivity {
                 if (currentLiveChannelItem != null) {
                     liveSettingItemAdapter.selectItem(currentLiveChannelItem.getSourceIndex(), true, false);
                 } else {
-                    // 无源时线路选择不可用，但不崩溃
                     liveSettingItemAdapter.selectItem(0, false, false);
                 }
                 break;
             case 1://画面比例
                 try {
-                    int scaleIndex = livePlayerManager.getLivePlayerScale();
+                    int scaleIndex;
+                    if (currentLiveChannelItem != null) {
+                        // 有源时从 LivePlayerManager 获取
+                        scaleIndex = livePlayerManager.getLivePlayerScale();
+                    } else {
+                        // 无源时从临时变量获取，如果没有则从 Hawk 获取
+                        if (tempPlayerScale != -1) {
+                            scaleIndex = tempPlayerScale;
+                        } else {
+                            scaleIndex = Hawk.get(HawkConfig.PLAY_SCALE, 0);
+                        }
+                    }
                     liveSettingItemAdapter.selectItem(scaleIndex, true, true);
                 } catch (Exception e) {
-                    // 无源时获取失败，使用默认值
                     e.printStackTrace();
-                    int defaultScale = Hawk.get(HawkConfig.PLAY_SCALE, 0);
-                    liveSettingItemAdapter.selectItem(defaultScale, true, true);
+                    liveSettingItemAdapter.selectItem(0, true, true);
                 }
                 break;
             case 2://播放解码
                 try {
-                    int playerType = livePlayerManager.getLivePlayerType();
+                    int playerType;
+                    if (currentLiveChannelItem != null) {
+                        // 有源时从 LivePlayerManager 获取
+                        playerType = livePlayerManager.getLivePlayerType();
+                    } else {
+                        // 无源时从临时变量获取，如果没有则从 Hawk 获取
+                        if (tempPlayerType != -1) {
+                            playerType = tempPlayerType;
+                        } else {
+                            playerType = Hawk.get(HawkConfig.PLAY_TYPE, 0);
+                        }
+                    }
                     liveSettingItemAdapter.selectItem(playerType, true, true);
                 } catch (Exception e) {
-                    // 无源时获取失败，使用默认值
                     e.printStackTrace();
-                    int defaultType = Hawk.get(HawkConfig.PLAY_TYPE, 0);
-                    liveSettingItemAdapter.selectItem(defaultType, true, true);
+                    liveSettingItemAdapter.selectItem(0, true, true);
                 }
                 break;
         }
@@ -1631,7 +1664,7 @@ public class LivePlayActivity extends BaseActivity {
         });
     }
 
-    // 修改 clickSettingItem 方法 - 无源时只保存设置
+    // 核心修改：每次点击都保存到Hawk，同时更新临时变量
     private void clickSettingItem(int position) {
         int settingGroupIndex = liveSettingGroupAdapter.getSelectedGroupIndex();
         if (settingGroupIndex < 4) {
@@ -1648,30 +1681,60 @@ public class LivePlayActivity extends BaseActivity {
                     Toast.makeText(App.getInstance(), "当前无直播源，无法切换线路", Toast.LENGTH_SHORT).show();
                 }
                 break;
+                
             case 1://画面比例
-                if (currentLiveChannelItem == null) {
-                    // 无源时只保存设置
+                try {
+                    // 保存到 Hawk
                     Hawk.put(HawkConfig.PLAY_SCALE, position);
-                    Toast.makeText(App.getInstance(), "画面比例已保存，添加直播源后生效", Toast.LENGTH_SHORT).show();
-                } else {
-                    livePlayerManager.changeLivePlayerScale(mVideoView, position, currentLiveChannelItem.getChannelName());
+                    
+                    if (currentLiveChannelItem != null) {
+                        // 有源时：调用原有方法（会更新内存并应用到播放器）
+                        livePlayerManager.changeLivePlayerScale(mVideoView, position, currentLiveChannelItem.getChannelName());
+                        Toast.makeText(App.getInstance(), "画面比例已应用", Toast.LENGTH_SHORT).show();
+                        // 清除临时变量
+                        tempPlayerScale = -1;
+                    } else {
+                        // 无源时：只保存到临时变量，不调用播放器方法
+                        tempPlayerScale = position;
+                        Toast.makeText(App.getInstance(), "画面比例已保存，添加直播源后生效", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    Hawk.put(HawkConfig.PLAY_SCALE, position);
+                    Toast.makeText(App.getInstance(), "设置已保存", Toast.LENGTH_SHORT).show();
                 }
                 break;
+                
             case 2://播放解码
-                if (currentLiveChannelItem == null) {
-                    // 无源时只保存设置
+                try {
+                    // 保存到 Hawk
                     Hawk.put(HawkConfig.PLAY_TYPE, position);
-                    Toast.makeText(App.getInstance(), "解码方式已保存，添加直播源后生效", Toast.LENGTH_SHORT).show();
-                } else {
-                    mVideoView.release();
-                    livePlayerManager.changeLivePlayerType(mVideoView, position, currentLiveChannelItem.getChannelName());
-                    mVideoView.setUrl(currentLiveChannelItem.getUrl(), setPlayHeaders(currentLiveChannelItem.getUrl()));
-                    mVideoView.start();
+                    
+                    if (currentLiveChannelItem != null) {
+                        // 有源时：调用原有方法（会更新内存并应用到播放器）
+                        mVideoView.release();
+                        livePlayerManager.changeLivePlayerType(mVideoView, position, currentLiveChannelItem.getChannelName());
+                        mVideoView.setUrl(currentLiveChannelItem.getUrl(), setPlayHeaders(currentLiveChannelItem.getUrl()));
+                        mVideoView.start();
+                        Toast.makeText(App.getInstance(), "解码方式已应用", Toast.LENGTH_SHORT).show();
+                        // 清除临时变量
+                        tempPlayerType = -1;
+                    } else {
+                        // 无源时：只保存到临时变量，不调用播放器方法
+                        tempPlayerType = position;
+                        Toast.makeText(App.getInstance(), "解码方式已保存，添加直播源后生效", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    Hawk.put(HawkConfig.PLAY_TYPE, position);
+                    Toast.makeText(App.getInstance(), "设置已保存", Toast.LENGTH_SHORT).show();
                 }
                 break;
+                
             case 3://超时换源
                 Hawk.put(HawkConfig.LIVE_CONNECT_TIMEOUT, position);
                 break;
+                
             case 4://偏好设置
                 boolean select = false;
                 switch (position) {
@@ -1700,6 +1763,7 @@ public class LivePlayActivity extends BaseActivity {
                 }
                 liveSettingItemAdapter.selectItem(position, select, false);
                 break;
+                
             case 5:// 直播历史
                 switch (position) {
                     case 0:
@@ -1736,6 +1800,7 @@ public class LivePlayActivity extends BaseActivity {
                         break;
                 }
                 break;
+                
             case 6:// 退出直播
                 switch (position) {
                     case 0:
@@ -1865,6 +1930,12 @@ public class LivePlayActivity extends BaseActivity {
             return;
         }
         
+        // 从 Hawk 加载保存的值到临时变量
+        int savedScale = Hawk.get(HawkConfig.PLAY_SCALE, 0);
+        int savedType = Hawk.get(HawkConfig.PLAY_TYPE, 0);
+        tempPlayerScale = savedScale;
+        tempPlayerType = savedType;
+        
         int lastChannelGroupIndex = -1;
         int lastLiveChannelIndex = -1;
         Intent intent = getIntent();
@@ -1879,6 +1950,19 @@ public class LivePlayActivity extends BaseActivity {
         }
 
         livePlayerManager.init(mVideoView);
+        
+        // 如果有源，将保存的设置应用到播放器
+        if (currentLiveChannelItem != null) {
+            livePlayerManager.changeLivePlayerScale(mVideoView, savedScale, currentLiveChannelItem.getChannelName());
+            mVideoView.release();
+            livePlayerManager.changeLivePlayerType(mVideoView, savedType, currentLiveChannelItem.getChannelName());
+            mVideoView.setUrl(currentLiveChannelItem.getUrl(), setPlayHeaders(currentLiveChannelItem.getUrl()));
+            mVideoView.start();
+            // 清除临时变量
+            tempPlayerScale = -1;
+            tempPlayerType = -1;
+        }
+        
         showTime();
         showNetSpeed();
         tvLeftChannelListLayout.setVisibility(View.INVISIBLE);
