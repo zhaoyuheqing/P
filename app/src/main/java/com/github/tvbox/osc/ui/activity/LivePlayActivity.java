@@ -331,31 +331,6 @@ public class LivePlayActivity extends BaseActivity {
         });
     }
 
-    // 创建空占位数据
-    private void createEmptyPlaceholder() {
-        liveChannelGroupList.clear();
-        
-        LiveChannelGroup emptyGroup = new LiveChannelGroup();
-        emptyGroup.setGroupIndex(0);
-        emptyGroup.setGroupName("无直播源");
-        emptyGroup.setLiveChannels(new ArrayList<>());
-        emptyGroup.setGroupPassword("");
-        liveChannelGroupList.add(emptyGroup);
-        
-        currentLiveChannelItem = null;
-        currentChannelGroupIndex = 0;
-        currentLiveChannelIndex = -1;
-        
-        if (tv_channelname != null) {
-            tv_channelname.setText("无直播源");
-            tv_channelnum.setText("");
-            tv_source.setText("0/0");
-            tv_size.setText("");
-            tv_curr_name.setText("请先添加直播源");
-            tv_next_name.setText("");
-        }
-    }
-
     boolean PiPON = Hawk.get(HawkConfig.BACKGROUND_PLAY_TYPE, 0) == 2;
 
     @Override
@@ -1557,7 +1532,6 @@ public class LivePlayActivity extends BaseActivity {
                 break;
             case 1://画面比例
                 try {
-                    // 无源时直接调用，不会崩溃
                     int scaleIndex = livePlayerManager.getLivePlayerScale();
                     liveSettingItemAdapter.selectItem(scaleIndex, true, true);
                 } catch (Exception e) {
@@ -1567,7 +1541,6 @@ public class LivePlayActivity extends BaseActivity {
                 break;
             case 2://播放解码
                 try {
-                    // 无源时直接调用，不会崩溃
                     int playerType = livePlayerManager.getLivePlayerType();
                     liveSettingItemAdapter.selectItem(playerType, true, true);
                 } catch (Exception e) {
@@ -1766,9 +1739,16 @@ public class LivePlayActivity extends BaseActivity {
         List<LiveChannelGroup> list = ApiConfig.get().getChannelGroupList();
         if (list.isEmpty()) {
             Toast.makeText(App.getInstance(), getString(R.string.act_live_play_empty_channel), Toast.LENGTH_SHORT).show();
-            // 不退出，创建空占位
-            createEmptyPlaceholder();
+            // 清空列表，不创建占位数据
+            liveChannelGroupList.clear();
             showSuccess();
+            // 显示无源提示
+            tv_channelname.setText("无直播源");
+            tv_channelnum.setText("");
+            tv_source.setText("0/0");
+            tv_size.setText("");
+            tv_curr_name.setText("请先添加直播源");
+            tv_next_name.setText("");
             return;
         }
 
@@ -1788,14 +1768,28 @@ public class LivePlayActivity extends BaseActivity {
             url = new String(Base64.decode(parsedUrl.getQueryParameter("ext"), Base64.DEFAULT | Base64.URL_SAFE | Base64.NO_WRAP), "UTF-8");
             if (url.equals("")) {
                 Toast.makeText(App.getInstance(), getString(R.string.act_live_play_empty_live_url), Toast.LENGTH_LONG).show();
-                createEmptyPlaceholder();
+                // 清空列表，不创建占位数据
+                liveChannelGroupList.clear();
                 showSuccess();
+                tv_channelname.setText("无直播源");
+                tv_channelnum.setText("");
+                tv_source.setText("0/0");
+                tv_size.setText("");
+                tv_curr_name.setText("请先添加直播源");
+                tv_next_name.setText("");
                 return;
             }
         } catch (Throwable th) {
             Toast.makeText(App.getInstance(), getString(R.string.act_live_play_empty_channel), Toast.LENGTH_SHORT).show();
-            createEmptyPlaceholder();
+            // 清空列表，不创建占位数据
+            liveChannelGroupList.clear();
             showSuccess();
+            tv_channelname.setText("无直播源");
+            tv_channelnum.setText("");
+            tv_source.setText("0/0");
+            tv_size.setText("");
+            tv_curr_name.setText("请先添加直播源");
+            tv_next_name.setText("");
             return;
         }
         showLoading();
@@ -1817,11 +1811,17 @@ public class LivePlayActivity extends BaseActivity {
                 List<LiveChannelGroup> list = ApiConfig.get().getChannelGroupList();
                 if (list.isEmpty()) {
                     Toast.makeText(App.getInstance(), getString(R.string.act_live_play_empty_channel), Toast.LENGTH_SHORT).show();
-                    createEmptyPlaceholder();
+                    liveChannelGroupList.clear();
                     mHandler.post(new Runnable() {
                         @Override
                         public void run() {
                             LivePlayActivity.this.showSuccess();
+                            tv_channelname.setText("无直播源");
+                            tv_channelnum.setText("");
+                            tv_source.setText("0/0");
+                            tv_size.setText("");
+                            tv_curr_name.setText("请先添加直播源");
+                            tv_next_name.setText("");
                         }
                     });
                     return;
@@ -1842,11 +1842,18 @@ public class LivePlayActivity extends BaseActivity {
             public void onError(Response<String> response) {
                 super.onError(response);
                 Toast.makeText(App.getInstance(), getString(R.string.act_live_play_network_error), Toast.LENGTH_LONG).show();
-                createEmptyPlaceholder();
+                // 清空列表，不创建占位数据
+                liveChannelGroupList.clear();
                 mHandler.post(new Runnable() {
                     @Override
                     public void run() {
                         LivePlayActivity.this.showSuccess();
+                        tv_channelname.setText("无直播源");
+                        tv_channelnum.setText("");
+                        tv_source.setText("0/0");
+                        tv_size.setText("");
+                        tv_curr_name.setText("请先添加直播源");
+                        tv_next_name.setText("");
                     }
                 });
             }
