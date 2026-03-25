@@ -88,11 +88,11 @@ import java.util.Locale;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.TimeZone;
+import java.util.concurrent.TimeUnit;
 
 import kotlin.Pair;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.Response;
 import xyz.doikki.videoplayer.player.VideoView;
 import xyz.doikki.videoplayer.util.PlayerUtils;
 
@@ -448,7 +448,7 @@ public class LivePlayActivity extends BaseActivity {
     }
 
     /**
-     * 请求EPG并保存到缓存
+     * 请求EPG并保存到缓存（同步请求）
      */
     private void fetchAndCacheEpg(String channelName, String dateStr) {
         try {
@@ -478,11 +478,11 @@ public class LivePlayActivity extends BaseActivity {
             
             // 同步请求
             OkHttpClient client = new OkHttpClient.Builder()
-                    .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-                    .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                    .connectTimeout(10, TimeUnit.SECONDS)
+                    .readTimeout(10, TimeUnit.SECONDS)
                     .build();
             Request request = new Request.Builder().url(epgUrl).build();
-            Response response = client.newCall(request).execute();
+            okhttp3.Response response = client.newCall(request).execute();
             
             if (response.isSuccessful()) {
                 String paramString = response.body().string();
