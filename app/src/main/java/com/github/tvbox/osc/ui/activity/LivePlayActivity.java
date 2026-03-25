@@ -72,6 +72,9 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -87,13 +90,16 @@ import java.util.Iterator;
 import java.util.TimeZone;
 
 import kotlin.Pair;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 import xyz.doikki.videoplayer.player.VideoView;
 import xyz.doikki.videoplayer.util.PlayerUtils;
 
 /**
  * @author pj567
  * @date :2021/1/12
- * @description:
+ * @description: LivePlayActivity with EPG cache and preload
  */
 public class LivePlayActivity extends BaseActivity {
 
@@ -171,12 +177,16 @@ public class LivePlayActivity extends BaseActivity {
     // center BACK button
     LinearLayout mBack;
 
-    // 统一使用 isShiyiMode
+    // 回放模式标记
     private boolean isShiyiMode = false;
     private String currentShiyiUrl = null;
     private String fallbackShiyiUrl = null;
     private boolean hasTriedFallback = false;
     private String currentShiyiTime = null;
+
+    // EPG缓存相关
+    private boolean isPreloadingEpg = false;
+    private static final String EPG_CACHE_DIR = "epg_cache";
 
     private HashMap<String, String> setPlayHeaders(String url) {
         HashMap<String, String> header = new HashMap();
@@ -296,6 +306,255 @@ public class LivePlayActivity extends BaseActivity {
         fallbackShiyiUrl = null;
         hasTriedFallback = false;
         currentShiyiTime = null;
+    }
+
+    // ==================== EPG缓存方法 ====================
+
+    /**
+     * 获取EPG缓存文件
+     */
+    private File getEpgCacheFile(String channelName, String date) {
+        String fileName = channelName.replaceAll("[^a-zA-Z0-9\\u4e00-\\u9fa5]", "_") + "_" + date + ".json";
+        File dir = new File(getApplicationContext().getFilesDir(), EPG_CACHE_DIR);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+        return new File(dir, fileName);
+    }
+
+    /**
+     * 保存EPG到缓存文件
+     */
+    private void saveEpgToCache(String channelName, String date, ArrayList<Epginfo> epgList, String logoUrl) {
+        try {
+            JSONObject cacheData = new JSONObject();
+            cacheData.put("channelName", channelName);
+            cacheData.put("date", date);
+            cacheData.put("timestamp", System.currentTimeMillis());
+            cacheData.put("logoUrl", logoUrl != null ? logoUrl : "");
+            
+            JSONArray epgArray = new JSONArray();
+            if (epgList != null) {
+                for (Epginfo epg : epgList) {
+                    JSONObject epgObj = new JSONObject();
+                    epgObj.put("title", epg.title);
+                    epgObj.put("start", epg.start);
+                    epgObj.put("end", epg.end);
+                    epgObj.put("originStart", epg.originStart);
+                    epgObj.put("originEnd", epg.originEnd);
+                    epgArray.put(epgObj);
+                }
+            }
+            cacheData.put("epgList", epgArray);
+            
+            File cacheFile = getEpgCacheFile(channelName, date);
+            try (FileWriter writer = new FileWriter(cacheFile)) {
+                writer.write(cacheData.toString());
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 从缓存读取EPG
+     */
+    private ArrayList<Epginfo> getEpgFromCache(String channelName, String date) {
+        try {
+            File cacheFile = getEpgCacheFile(channelName, date);
+            if (!cacheFile.exists()) {
+                return null;
+            }
+            
+            StringBuilder content = new StringBuilder();
+            try (FileReader reader = new FileReader(cacheFile)) {
+                char[] buffer = new char[1024];
+                int len;
+                while ((len = reader.read(buffer)) != -1) {
+                    content.append(buffer, 0, len);
+                }
+            }
+            
+            JSONObject cacheData = new JSONObject(content.toString());
+            
+            // 检查缓存是否过期（24小时）
+            long timestamp = cacheData.getLong("timestamp");
+            long now = System.currentTimeMillis();
+            if (now - timestamp > 24 * 60 * 60 * 1000) {
+                cacheFile.delete();
+                return null;
+            }
+            
+            // 获取logo URL
+            String logoUrl = cacheData.optString("logoUrl", null);
+            if (logoUrl != null && !logoUrl.isEmpty() && channel_Name != null && 
+                channel_Name.getChannelName() != null && channel_Name.getChannelName().equals(channelName)) {
+                getTvLogo(channelName, logoUrl);
+            }
+            
+            JSONArray epgArray = cacheData.getJSONArray("epgList");
+            ArrayList<Epginfo> epgList = new ArrayList<>();
+            
+            for (int i = 0; i < epgArray.length(); i++) {
+                JSONObject epgObj = epgArray.getJSONObject(i);
+                Date dateObj = parseDate(date);
+                Epginfo epg = new Epginfo(
+                    dateObj,
+                    epgObj.getString("title"),
+                    dateObj,
+                    epgObj.getString("start"),
+                    epgObj.getString("end"),
+                    i
+                );
+                epg.originStart = epgObj.getString("originStart");
+                epg.originEnd = epgObj.getString("originEnd");
+                epgList.add(epg);
+            }
+            
+            return epgList;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * 解析日期字符串
+     */
+    private Date parseDate(String dateStr) {
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+            return sdf.parse(dateStr);
+        } catch (Exception e) {
+            return new Date();
+        }
+    }
+
+    /**
+     * 获取所有需要预加载的日期列表（9个日期）
+     */
+    private List<String> getPreloadDates() {
+        List<String> dates = new ArrayList<>();
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(new Date());
+        calendar.add(Calendar.DAY_OF_MONTH, -6);
+        
+        for (int i = 0; i < 9; i++) {
+            dates.add(dateFormat.format(calendar.getTime()));
+            calendar.add(Calendar.DAY_OF_MONTH, 1);
+        }
+        return dates;
+    }
+
+    /**
+     * 请求EPG并保存到缓存
+     */
+    private void fetchAndCacheEpg(String channelName, String dateStr) {
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+            Date date = sdf.parse(dateStr);
+            
+            // 获取EPG信息
+            String[] epgInfo = EpgUtil.getEpgInfo(channelName);
+            String epgTagName = channelName;
+            String logoUrl = null;
+            if (epgInfo != null) {
+                if (epgInfo[0] != null) logoUrl = epgInfo[0];
+                if (epgInfo.length > 1 && epgInfo[1] != null && !epgInfo[1].isEmpty()) {
+                    epgTagName = epgInfo[1];
+                }
+            }
+            
+            // 构建EPG URL
+            String epgUrl;
+            if (epgStringAddress.contains("{name}") && epgStringAddress.contains("{date}")) {
+                epgUrl = epgStringAddress.replace("{name}", URLEncoder.encode(epgTagName))
+                        .replace("{date}", sdf.format(date));
+            } else {
+                epgUrl = epgStringAddress + "?ch=" + URLEncoder.encode(epgTagName) + 
+                        "&date=" + sdf.format(date);
+            }
+            
+            // 同步请求
+            OkHttpClient client = new OkHttpClient.Builder()
+                    .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                    .build();
+            Request request = new Request.Builder().url(epgUrl).build();
+            Response response = client.newCall(request).execute();
+            
+            if (response.isSuccessful()) {
+                String paramString = response.body().string();
+                ArrayList<Epginfo> arrayList = new ArrayList<>();
+                
+                try {
+                    if (paramString.contains("epg_data")) {
+                        JSONObject json = new JSONObject(paramString);
+                        String newLogoUrl = json.optString("logo", null);
+                        if (newLogoUrl != null && !newLogoUrl.isEmpty()) {
+                            logoUrl = newLogoUrl;
+                        }
+                        JSONArray jSONArray = json.optJSONArray("epg_data");
+                        if (jSONArray != null) {
+                            for (int b = 0; b < jSONArray.length(); b++) {
+                                JSONObject jSONObject = jSONArray.getJSONObject(b);
+                                Epginfo epgbcinfo = new Epginfo(
+                                    date, 
+                                    jSONObject.optString("title"), 
+                                    date,
+                                    jSONObject.optString("start"), 
+                                    jSONObject.optString("end"), 
+                                    b
+                                );
+                                arrayList.add(epgbcinfo);
+                            }
+                        }
+                    }
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+                
+                // 保存到缓存文件
+                if (!arrayList.isEmpty()) {
+                    saveEpgToCache(channelName, dateStr, arrayList, logoUrl);
+                }
+            }
+            response.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 预加载当前分组所有频道所有日期的EPG
+     */
+    private void preloadGroupAllEpg() {
+        if (isPreloadingEpg) return;
+        
+        List<LiveChannelItem> channels = getLiveChannels(currentChannelGroupIndex);
+        if (channels == null || channels.isEmpty()) return;
+        
+        List<String> dates = getPreloadDates();
+        
+        isPreloadingEpg = true;
+        
+        // 在后台线程预加载
+        new Thread(() -> {
+            for (LiveChannelItem channel : channels) {
+                String channelName = channel.getChannelName();
+                for (String date : dates) {
+                    // 检查缓存
+                    ArrayList<Epginfo> cachedEpg = getEpgFromCache(channelName, date);
+                    if (cachedEpg != null && !cachedEpg.isEmpty()) {
+                        continue;
+                    }
+                    // 请求网络并缓存
+                    fetchAndCacheEpg(channelName, date);
+                }
+            }
+            isPreloadingEpg = false;
+        }).start();
     }
 
     @Override
@@ -605,6 +864,7 @@ public class LivePlayActivity extends BaseActivity {
             mVideoView.release();
             mVideoView = null;
         }
+        isPreloadingEpg = false;
     }
 
     private void showChannelList() {
@@ -889,6 +1149,18 @@ public class LivePlayActivity extends BaseActivity {
         }
         
         String channelName = channel_Name.getChannelName();
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        String dateStr = sdf.format(date);
+        
+        // 优先从缓存读取
+        ArrayList<Epginfo> cachedEpg = getEpgFromCache(channelName, dateStr);
+        if (cachedEpg != null && !cachedEpg.isEmpty()) {
+            showEpg(date, cachedEpg);
+            showBottomEpg();
+            return;
+        }
+        
+        // 没有缓存，网络请求
         SimpleDateFormat timeFormat = new SimpleDateFormat("yyyy-MM-dd");
         timeFormat.setTimeZone(TimeZone.getTimeZone("GMT+8:00"));
         String[] epgInfo = EpgUtil.getEpgInfo(channelName);
@@ -907,27 +1179,36 @@ public class LivePlayActivity extends BaseActivity {
         } else {
             epgUrl = epgStringAddress + "?ch=" + URLEncoder.encode(epgTagName) + "&date=" + timeFormat.format(date);
         }
+        
         OkGo.<String>get(epgUrl).execute(new StringCallback() {
             public void onSuccess(Response<String> response) {
                 String paramString = response.body();
                 ArrayList arrayList = new ArrayList();
+                String logoUrl = null;
 
                 try {
                     if (paramString.contains("epg_data")) {
-                        final JSONArray jSONArray = new JSONObject(paramString).optJSONArray("epg_data");
-                        if (jSONArray != null)
+                        JSONObject json = new JSONObject(paramString);
+                        logoUrl = json.optString("logo", null);
+                        final JSONArray jSONArray = json.optJSONArray("epg_data");
+                        if (jSONArray != null) {
                             for (int b = 0; b < jSONArray.length(); b++) {
                                 JSONObject jSONObject = jSONArray.getJSONObject(b);
                                 Epginfo epgbcinfo = new Epginfo(date, jSONObject.optString("title"), date, jSONObject.optString("start"), jSONObject.optString("end"), b);
                                 arrayList.add(epgbcinfo);
                             }
+                        }
                     }
 
                 } catch (JSONException jSONException) {
                     jSONException.printStackTrace();
                 }
+                
                 showEpg(date, arrayList);
-
+                
+                // 保存到缓存
+                saveEpgToCache(channelName, dateStr, arrayList, logoUrl);
+                
                 String savedEpgKey = channelName + "_" + epgDateAdapter.getItem(epgDateAdapter.getSelectedIndex()).getDatePresented();
                 if (!hsEpg.contains(savedEpgKey))
                     hsEpg.put(savedEpgKey, arrayList);
@@ -944,7 +1225,6 @@ public class LivePlayActivity extends BaseActivity {
     private boolean replayChannel() {
         if (mVideoView == null || currentLiveChannelItem == null) return true;
         
-        // 清除回放状态
         clearShiyiState();
         
         mVideoView.release();
@@ -991,7 +1271,6 @@ public class LivePlayActivity extends BaseActivity {
         if (mVideoView == null) return true;
         mVideoView.release();
         
-        // 切换频道时清除回放状态
         clearShiyiState();
         
         if (!changeSource) {
@@ -1190,7 +1469,6 @@ public class LivePlayActivity extends BaseActivity {
                         break;
                     case VideoView.STATE_BUFFERED:
                     case VideoView.STATE_PLAYING:
-                        // 播放成功，清除回放模式标记
                         if (isShiyiMode) {
                             clearShiyiState();
                         }
@@ -1203,18 +1481,14 @@ public class LivePlayActivity extends BaseActivity {
                         mHandler.removeCallbacks(mConnectTimeoutChangeSourceRun);
                         mHandler.removeCallbacks(mConnectTimeoutReplayRun);
                         
-                        // 如果是回放模式且失败了
                         if (isShiyiMode) {
-                            // 尝试备选URL
                             if (!hasTriedFallback && fallbackShiyiUrl != null) {
                                 hasTriedFallback = true;
                                 Toast.makeText(App.getInstance(), "TVOD回放失败，尝试PLTV模式", Toast.LENGTH_SHORT).show();
-                                // 使用备选URL，传入正确的header
                                 mVideoView.setUrl(fallbackShiyiUrl, setPlayHeaders(fallbackShiyiUrl));
                                 mVideoView.start();
                                 return;
                             } else {
-                                // 回放完全失败，调用 replayChannel 切换到直播
                                 Toast.makeText(App.getInstance(), "该时段无法回放，切换到直播", Toast.LENGTH_LONG).show();
                                 clearShiyiState();
                                 replayChannel();
@@ -1222,7 +1496,6 @@ public class LivePlayActivity extends BaseActivity {
                             }
                         }
                         
-                        // 非回放模式，执行原有的超时换源逻辑
                         if (Hawk.get(HawkConfig.LIVE_CONNECT_TIMEOUT, 2) == 0) {
                             mHandler.postDelayed(mConnectTimeoutReplayRun, 30 * 1000L);
                         } else {
@@ -1321,7 +1594,6 @@ public class LivePlayActivity extends BaseActivity {
                 Epginfo selectedData = epgListAdapter.getItem(position);
                 String targetDate = dateFormat.format(date);
                 
-                // 使用跨天时间处理
                 String[] shiyiTimes = buildShiyiTimes(targetDate, selectedData.originStart, selectedData.originEnd);
                 String shiyiStartdate = shiyiTimes[0];
                 String shiyiEnddate = shiyiTimes[1];
@@ -1334,15 +1606,12 @@ public class LivePlayActivity extends BaseActivity {
                 epgListAdapter.setSelectedEpgIndex(position);
                 
                 if (now.compareTo(selectedData.startdateTime) >= 0 && now.compareTo(selectedData.enddateTime) <= 0) {
-                    // 当前正在播放的节目 - 正常播放
                     mVideoView.release();
                     clearShiyiState();
                     mVideoView.setUrl(currentLiveChannelItem.getUrl(), setPlayHeaders(currentLiveChannelItem.getUrl()));
                     mVideoView.start();
                     epgListAdapter.setShiyiSelection(-1, false, timeFormat.format(date));
                 } else {
-                    // 历史节目 - 时移回放
-                    // 检查回放时间是否有效
                     if (!isValidShiyiTime(shiyiStartdate, shiyiEnddate)) {
                         Toast.makeText(LivePlayActivity.this, "无效的回放时间", Toast.LENGTH_SHORT).show();
                         return;
@@ -1352,17 +1621,14 @@ public class LivePlayActivity extends BaseActivity {
                     currentShiyiTime = shiyiStartdate + "-" + shiyiEnddate;
                     isShiyiMode = true;
                     
-                    // 构建回放URL
                     String[] shiyiUrls = buildShiyiUrls(currentLiveChannelItem.getUrl(), currentShiyiTime);
                     String primaryUrl = shiyiUrls[0];
                     String fallbackUrl = shiyiUrls[1];
                     
-                    // 设置回放状态
                     currentShiyiUrl = primaryUrl;
                     fallbackShiyiUrl = fallbackUrl;
                     hasTriedFallback = false;
                     
-                    // 使用实际播放的URL获取headers
                     mVideoView.setUrl(primaryUrl, setPlayHeaders(primaryUrl));
                     mVideoView.start();
                     
@@ -1385,7 +1651,6 @@ public class LivePlayActivity extends BaseActivity {
                 Epginfo selectedData = epgListAdapter.getItem(position);
                 String targetDate = dateFormat.format(date);
                 
-                // 使用跨天时间处理
                 String[] shiyiTimes = buildShiyiTimes(targetDate, selectedData.originStart, selectedData.originEnd);
                 String shiyiStartdate = shiyiTimes[0];
                 String shiyiEnddate = shiyiTimes[1];
@@ -1398,15 +1663,12 @@ public class LivePlayActivity extends BaseActivity {
                 epgListAdapter.setSelectedEpgIndex(position);
                 
                 if (now.compareTo(selectedData.startdateTime) >= 0 && now.compareTo(selectedData.enddateTime) <= 0) {
-                    // 当前正在播放的节目 - 正常播放
                     mVideoView.release();
                     clearShiyiState();
                     mVideoView.setUrl(currentLiveChannelItem.getUrl(), setPlayHeaders(currentLiveChannelItem.getUrl()));
                     mVideoView.start();
                     epgListAdapter.setShiyiSelection(-1, false, timeFormat.format(date));
                 } else {
-                    // 历史节目 - 时移回放
-                    // 检查回放时间是否有效
                     if (!isValidShiyiTime(shiyiStartdate, shiyiEnddate)) {
                         Toast.makeText(LivePlayActivity.this, "无效的回放时间", Toast.LENGTH_SHORT).show();
                         return;
@@ -1416,17 +1678,14 @@ public class LivePlayActivity extends BaseActivity {
                     currentShiyiTime = shiyiStartdate + "-" + shiyiEnddate;
                     isShiyiMode = true;
                     
-                    // 构建回放URL
                     String[] shiyiUrls = buildShiyiUrls(currentLiveChannelItem.getUrl(), currentShiyiTime);
                     String primaryUrl = shiyiUrls[0];
                     String fallbackUrl = shiyiUrls[1];
                     
-                    // 设置回放状态
                     currentShiyiUrl = primaryUrl;
                     fallbackShiyiUrl = fallbackUrl;
                     hasTriedFallback = false;
                     
-                    // 使用实际播放的URL获取headers
                     mVideoView.setUrl(primaryUrl, setPlayHeaders(primaryUrl));
                     mVideoView.start();
                     
@@ -2011,38 +2270,40 @@ public class LivePlayActivity extends BaseActivity {
     }
 
     private void initLiveState() {
-        tvLeftChannelListLayout.setVisibility(View.INVISIBLE);
-        tvRightSettingLayout.setVisibility(View.INVISIBLE);
-        
-        livePlayerManager.init(mVideoView);
-        showTime();
-        showNetSpeed();
-
-        liveChannelGroupAdapter.setNewData(liveChannelGroupList);
-        
-        if (!liveChannelGroupList.isEmpty() && 
-            !(liveChannelGroupList.size() == 1 && liveChannelGroupList.get(0).getLiveChannels().isEmpty())) {
-            
-            int lastChannelGroupIndex = -1;
-            int lastLiveChannelIndex = -1;
-            Intent intent = getIntent();
-            if (intent != null && intent.getExtras() != null) {
-                Bundle bundle = intent.getExtras();
-                lastChannelGroupIndex = bundle.getInt("groupIndex", 0);
-                lastLiveChannelIndex = bundle.getInt("channelIndex", 0);
-            } else {
-                Pair<Integer, Integer> lastChannel = JavaUtil.findLiveLastChannel(liveChannelGroupList);
-                lastChannelGroupIndex = lastChannel.getFirst();
-                lastLiveChannelIndex = lastChannel.getSecond();
-            }
-            selectChannelGroup(lastChannelGroupIndex, false, lastLiveChannelIndex);
-        } else {
+        if (liveChannelGroupList.isEmpty() || 
+            (liveChannelGroupList.size() == 1 && liveChannelGroupList.get(0).getLiveChannels().isEmpty())) {
             tv_channelname.setText("无直播源");
             tv_channelnum.setText("");
             tv_source.setText("0/0");
             tv_size.setText("");
-            tv_curr_name.setText("请先添加直播源");
-            tv_next_name.setText("");
+            return;
+        }
+        
+        int lastChannelGroupIndex = -1;
+        int lastLiveChannelIndex = -1;
+        Intent intent = getIntent();
+        if (intent != null && intent.getExtras() != null) {
+            Bundle bundle = intent.getExtras();
+            lastChannelGroupIndex = bundle.getInt("groupIndex", 0);
+            lastLiveChannelIndex = bundle.getInt("channelIndex", 0);
+        } else {
+            Pair<Integer, Integer> lastChannel = JavaUtil.findLiveLastChannel(liveChannelGroupList);
+            lastChannelGroupIndex = lastChannel.getFirst();
+            lastLiveChannelIndex = lastChannel.getSecond();
+        }
+
+        livePlayerManager.init(mVideoView);
+        showTime();
+        showNetSpeed();
+        tvLeftChannelListLayout.setVisibility(View.INVISIBLE);
+        tvRightSettingLayout.setVisibility(View.INVISIBLE);
+
+        liveChannelGroupAdapter.setNewData(liveChannelGroupList);
+        selectChannelGroup(lastChannelGroupIndex, false, lastLiveChannelIndex);
+        
+        // 预加载当前分组所有频道所有日期的EPG
+        if (currentLiveChannelItem != null) {
+            preloadGroupAllEpg();
         }
     }
 
