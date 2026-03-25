@@ -174,10 +174,10 @@ public class LivePlayActivity extends BaseActivity {
     private boolean isSHIYI = false;
     private static String shiyi_time;//时移时间
     
-    // 回放模式标记，用于区分回放失败和直播失败
+    // 回放模式标记
     private boolean isShiyiMode = false;
-    // 回放失败时记录原始URL，用于回退
-    private String shiyiFallbackUrl = null;
+    private String currentShiyiUrl = null;
+    private String fallbackShiyiUrl = null;
 
     private HashMap<String, String> setPlayHeaders(String url) {
         HashMap<String, String> header = new HashMap();
@@ -216,19 +216,15 @@ public class LivePlayActivity extends BaseActivity {
 
     /**
      * 构建回放URL
-     * 对于包含 /PLTV/ 的源，先尝试 TVOD 路径
      * @param originalUrl 原始直播URL
      * @param shiyiTime 回放时间参数，格式: yyyyMMddHHmmss-yyyyMMddHHmmss
-     * @return 回放URL数组，[0]=首选回放URL，[1]=备选URL（原PLTV路径）
+     * @return 回放URL数组，[0]=首选URL（TVOD路径），[1]=备选URL（原PLTV路径）
      */
     private String[] buildShiyiUrls(String originalUrl, String shiyiTime) {
         String[] result = new String[2];
-        String shiyiParam = "?playseek=" + shiyiTime;
-        
-        // 检查URL是否已有参数
         String separator = originalUrl.contains("?") ? "&" : "?";
         
-        // 备选URL：原URL直接添加参数（默认行为）
+        // 备选URL：原URL直接添加参数
         result[1] = originalUrl + separator + "playseek=" + shiyiTime;
         
         // 首选URL：如果包含 /PLTV/，转换为 /TVOD/
@@ -240,7 +236,6 @@ public class LivePlayActivity extends BaseActivity {
                 result[0] = tvodUrl + "?playseek=" + shiyiTime;
             }
         } else {
-            // 其他源，首选和备选相同
             result[0] = result[1];
         }
         
@@ -1132,10 +1127,11 @@ public class LivePlayActivity extends BaseActivity {
                         break;
                     case VideoView.STATE_BUFFERED:
                     case VideoView.STATE_PLAYING:
-                        // 播放成功，清除回放失败标记
+                        // 播放成功，清除回放模式标记
                         if (isShiyiMode) {
                             isShiyiMode = false;
-                            shiyiFallbackUrl = null;
+                            currentShiyiUrl = null;
+                            fallbackShiyiUrl = null;
                         }
                         currentLiveChangeSourceTimes = 0;
                         mHandler.removeCallbacks(mConnectTimeoutChangeSourceRun);
@@ -1148,22 +1144,21 @@ public class LivePlayActivity extends BaseActivity {
                         
                         // 如果是回放模式且失败了
                         if (isShiyiMode) {
-                            isShiyiMode = false;
-                            
-                            // 如果有备选URL，尝试使用备选URL
-                            if (shiyiFallbackUrl != null && !shiyiFallbackUrl.equals(mVideoView.getUrl())) {
+                            // 如果有备选URL且当前播放的不是备选URL，尝试备选
+                            if (fallbackShiyiUrl != null && !fallbackShiyiUrl.equals(currentShiyiUrl)) {
                                 Toast.makeText(App.getInstance(), "回放失败，尝试普通播放", Toast.LENGTH_SHORT).show();
                                 isSHIYI = false;
-                                mVideoView.setUrl(shiyiFallbackUrl, setPlayHeaders(currentLiveChannelItem.getUrl()));
+                                isShiyiMode = false;
+                                mVideoView.setUrl(fallbackShiyiUrl, setPlayHeaders(currentLiveChannelItem.getUrl()));
                                 mVideoView.start();
-                                shiyiFallbackUrl = null;
                                 return;
                             } else {
                                 // 回放完全失败，切换到当前直播
                                 Toast.makeText(App.getInstance(), "该时段无法回放，切换到直播", Toast.LENGTH_LONG).show();
                                 isSHIYI = false;
-                                shiyiFallbackUrl = null;
-                                // 播放当前直播
+                                isShiyiMode = false;
+                                currentShiyiUrl = null;
+                                fallbackShiyiUrl = null;
                                 mVideoView.setUrl(currentLiveChannelItem.getUrl(), setPlayHeaders(currentLiveChannelItem.getUrl()));
                                 mVideoView.start();
                                 return;
@@ -1294,7 +1289,8 @@ public class LivePlayActivity extends BaseActivity {
                     
                     // 设置回放模式标记
                     isShiyiMode = true;
-                    shiyiFallbackUrl = fallbackUrl;
+                    currentShiyiUrl = primaryUrl;
+                    fallbackShiyiUrl = fallbackUrl;
                     
                     // 先尝试首选URL（TVOD路径）
                     mVideoView.setUrl(primaryUrl, setPlayHeaders(currentLiveChannelItem.getUrl()));
@@ -1344,7 +1340,8 @@ public class LivePlayActivity extends BaseActivity {
                     
                     // 设置回放模式标记
                     isShiyiMode = true;
-                    shiyiFallbackUrl = fallbackUrl;
+                    currentShiyiUrl = primaryUrl;
+                    fallbackShiyiUrl = fallbackUrl;
                     
                     // 先尝试首选URL（TVOD路径）
                     mVideoView.setUrl(primaryUrl, setPlayHeaders(currentLiveChannelItem.getUrl()));
