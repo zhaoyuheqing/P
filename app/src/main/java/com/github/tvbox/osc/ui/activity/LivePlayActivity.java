@@ -176,7 +176,7 @@ public class LivePlayActivity extends BaseActivity {
     private String currentShiyiUrl = null;
     private String fallbackShiyiUrl = null;
     private boolean hasTriedFallback = false;
-    private String currentShiyiTime = null;  // 用于显示
+    private String currentShiyiTime = null;
 
     private HashMap<String, String> setPlayHeaders(String url) {
         HashMap<String, String> header = new HashMap();
@@ -284,28 +284,6 @@ public class LivePlayActivity extends BaseActivity {
             return start < end;
         } catch (Exception e) {
             return false;
-        }
-    }
-
-    /**
-     * 检查是否在时移窗口内
-     */
-    private boolean isInShiyiWindow(String startTimeStr) {
-        try {
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
-            long startTime = sdf.parse(startTimeStr).getTime();
-            long currentTime = System.currentTimeMillis();
-            long diffHours = (currentTime - startTime) / (1000 * 60 * 60);
-            
-            int windowHours = Hawk.get(HawkConfig.SHIYI_WINDOW_HOURS, 2);
-            
-            if (diffHours > windowHours) {
-                Toast.makeText(this, "该时段已超出时移窗口（最多" + windowHours + "小时）", Toast.LENGTH_SHORT).show();
-                return false;
-            }
-            return true;
-        } catch (Exception e) {
-            return true;
         }
     }
 
@@ -846,7 +824,7 @@ public class LivePlayActivity extends BaseActivity {
     };
 
     private void showBottomEpg() {
-        if (isShiyiMode)  // 原来是 if (isSHIYI)
+        if (isShiyiMode)
             return;
         if (channel_Name == null || channel_Name.getChannelName() == null) {
             tv_curr_name.setText("无节目信息");
@@ -1370,11 +1348,6 @@ public class LivePlayActivity extends BaseActivity {
                         return;
                     }
                     
-                    // 检查时移窗口
-                    if (!isInShiyiWindow(shiyiStartdate)) {
-                        return;
-                    }
-                    
                     mVideoView.release();
                     currentShiyiTime = shiyiStartdate + "-" + shiyiEnddate;
                     isShiyiMode = true;
@@ -1436,11 +1409,6 @@ public class LivePlayActivity extends BaseActivity {
                     // 检查回放时间是否有效
                     if (!isValidShiyiTime(shiyiStartdate, shiyiEnddate)) {
                         Toast.makeText(LivePlayActivity.this, "无效的回放时间", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    
-                    // 检查时移窗口
-                    if (!isInShiyiWindow(shiyiStartdate)) {
                         return;
                     }
                     
