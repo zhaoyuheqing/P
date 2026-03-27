@@ -1767,12 +1767,18 @@ public class LivePlayActivity extends BaseActivity {
     }
 
     private void selectSettingGroup(int position, boolean focus) {
-        if (!isCurrentLiveChannelValid()) return;
+        // 修改：只检查需要直播源的功能（线路选择）
+        if (!isCurrentLiveChannelValid() && position == 0) {
+            Toast.makeText(App.getInstance(), "无直播源，无法切换线路", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
         if (focus) {
             liveSettingGroupAdapter.setFocusedGroupIndex(position);
             liveSettingItemAdapter.setFocusedItemIndex(-1);
         }
         if (position == liveSettingGroupAdapter.getSelectedGroupIndex() || position < -1) return;
+        
         liveSettingGroupAdapter.setSelectedGroupIndex(position);
         liveSettingItemAdapter.setNewData(liveSettingGroupList.get(position).getLiveSettingItems());
         switch (position) {
@@ -1839,6 +1845,13 @@ public class LivePlayActivity extends BaseActivity {
 
     private void clickSettingItem(int position) {
         int settingGroupIndex = liveSettingGroupAdapter.getSelectedGroupIndex();
+        
+        // 线路选择需要特殊处理
+        if (settingGroupIndex == 0 && !isCurrentLiveChannelValid()) {
+            Toast.makeText(App.getInstance(), "当前无直播源，无法切换线路", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
         if (settingGroupIndex < 4) {
             if (position == liveSettingItemAdapter.getSelectedItemIndex()) return;
             liveSettingItemAdapter.selectItem(position, true, true);
@@ -2040,23 +2053,28 @@ public class LivePlayActivity extends BaseActivity {
         }
     }
 
-    // ==================== 修复无源进入逻辑 ====================
-
     private void initLiveState() {
-        // 先设置布局为隐藏状态（无论有源无源都先隐藏）
+        // 始终初始化UI组件（即使无源）
         tvLeftChannelListLayout.setVisibility(View.INVISIBLE);
         tvRightSettingLayout.setVisibility(View.INVISIBLE);
         
         livePlayerManager.init(mVideoView);
         showTime();
         showNetSpeed();
-
         liveChannelGroupAdapter.setNewData(liveChannelGroupList);
         
-        // 如果有源，正常处理
-        if (!liveChannelGroupList.isEmpty() && 
-            !(liveChannelGroupList.size() == 1 && liveChannelGroupList.get(0).getLiveChannels().isEmpty())) {
-            
+        if (liveChannelGroupList.isEmpty() || 
+            (liveChannelGroupList.size() == 1 && liveChannelGroupList.get(0).getLiveChannels().isEmpty())) {
+            // 无源时显示提示信息
+            tv_channelname.setText("无直播源");
+            tv_channelnum.setText("");
+            tv_source.setText("0/0");
+            tv_size.setText("");
+            tv_curr_name.setText("请先添加直播源");
+            tv_next_name.setText("");
+            // 不返回，继续执行后续初始化，让设置面板可用
+        } else {
+            // 有源时的正常播放逻辑
             int lastChannelGroupIndex = -1;
             int lastLiveChannelIndex = -1;
             Intent intent = getIntent();
@@ -2070,22 +2088,8 @@ public class LivePlayActivity extends BaseActivity {
                 lastLiveChannelIndex = lastChannel.getSecond();
             }
             selectChannelGroup(lastChannelGroupIndex, false, lastLiveChannelIndex);
-            
-            // 有源时才启动其他频道预加载
+            // 延迟启动其他频道预加载
             backgroundPreloadOtherChannels();
-        } else {
-            // 无源时，显示底部提示，但不调用任何预加载
-            tv_channelname.setText("无直播源");
-            tv_channelnum.setText("");
-            tv_source.setText("0/0");
-            tv_size.setText("");
-            tv_curr_name.setText("请先添加直播源");
-            tv_next_name.setText("");
-            
-            // 清空EPG显示
-            if (epgListAdapter != null) {
-                epgListAdapter.setNewData(new ArrayList<>());
-            }
         }
     }
 
