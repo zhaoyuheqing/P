@@ -2230,7 +2230,7 @@ public class LivePlayActivity extends BaseActivity {
         liveSettingGroupList.get(0).setLiveSettingItems(liveSettingItemList);
     }
 
-    // ==================== 区域11: 辅助方法 ====================
+        // ==================== 区域11: 辅助方法 ====================
     // ============================================================
 
     // ---------- 11.1 频道数据获取 ----------
