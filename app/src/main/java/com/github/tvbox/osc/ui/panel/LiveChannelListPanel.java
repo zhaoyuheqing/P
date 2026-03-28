@@ -1,5 +1,7 @@
 package com.github.tvbox.osc.ui.panel;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.content.Context;
 import android.os.Handler;
 import android.view.View;
@@ -23,9 +25,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 左侧频道列表面板 - 最终稳定版
- * 职责：纯UI展示 + 用户交互
- * 所有业务状态由 Activity 维护，Panel 通过 refreshFull / loadGroup 等方法更新
+ * 左侧频道列表面板 - 最终稳定编译版
+ * 已修复：OnItemListener 完整实现 + AnimatorListenerAdapter import
  */
 public class LiveChannelListPanel {
 
@@ -76,9 +77,6 @@ public class LiveChannelListPanel {
 
     // ==================== 统一刷新入口 ====================
 
-    /**
-     * 完整刷新面板（推荐主要使用这个方法）
-     */
     public void refreshFull(List<LiveChannelGroup> groups, int currentGroupIndex, int currentChannelIndex) {
         if (groupAdapter != null) {
             groupAdapter.setNewData(groups);
@@ -99,9 +97,6 @@ public class LiveChannelListPanel {
         }
     }
 
-    /**
-     * 更新高亮和滚动（播放频道切换后调用）
-     */
     public void updateSelectionAndScroll(int groupIndex, int channelIndex) {
         if (groupAdapter != null) groupAdapter.setSelectedGroupIndex(groupIndex);
         if (channelAdapter != null) channelAdapter.setSelectedChannelIndex(channelIndex);
@@ -111,9 +106,6 @@ public class LiveChannelListPanel {
         }
     }
 
-    /**
-     * 切换到指定分组并加载其频道列表（密码验证成功后强烈推荐使用）
-     */
     public void loadGroup(int groupIndex, List<LiveChannelGroup> allGroups) {
         if (groupAdapter != null) {
             groupAdapter.setSelectedGroupIndex(groupIndex);
@@ -126,7 +118,7 @@ public class LiveChannelListPanel {
 
         if (channelAdapter != null) {
             channelAdapter.setNewData(channels != null ? channels : new ArrayList<>());
-            channelAdapter.setSelectedChannelIndex(-1); // 默认不选中具体频道
+            channelAdapter.setSelectedChannelIndex(-1);
         }
 
         if (isShowing) {
@@ -183,9 +175,20 @@ public class LiveChannelListPanel {
 
         groupView.setOnItemListener(new TvRecyclerView.OnItemListener() {
             @Override
+            public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {
+                // 可选预选中处理
+            }
+
+            @Override
             public void onItemSelected(TvRecyclerView parent, View itemView, int position) {
                 if (groupAdapter != null) groupAdapter.setFocusedGroupIndex(position);
                 if (channelAdapter != null) channelAdapter.setFocusedChannelIndex(-1);
+            }
+
+            @Override
+            public void onItemClick(TvRecyclerView parent, View itemView, int position) {
+                FastClickCheckUtil.check(itemView);
+                if (listener != null) listener.onGroupSelected(position);
             }
         });
 
@@ -207,10 +210,15 @@ public class LiveChannelListPanel {
 
         channelView.setOnItemListener(new TvRecyclerView.OnItemListener() {
             @Override
+            public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {
+                // 可选
+            }
+
+            @Override
             public void onItemSelected(TvRecyclerView parent, View itemView, int position) {
                 if (position < 0) return;
                 if (groupAdapter != null) groupAdapter.setFocusedGroupIndex(-1);
-                if (channelAdapter != null) channelAdapter.setFocusedChannelIndex(position);
+                if (channelAdapter != null) channelAdapter.setFocusedItemIndex(position);
 
                 handler.removeCallbacks(hideRunnable);
                 handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
@@ -289,9 +297,9 @@ public class LiveChannelListPanel {
                 .alpha(0.0f)
                 .setDuration(250)
                 .setInterpolator(new DecelerateInterpolator())
-                .setListener(new android.animation.AnimatorListenerAdapter() {
+                .setListener(new AnimatorListenerAdapter() {
                     @Override
-                    public void onAnimationEnd(android.animation.Animator animation) {
+                    public void onAnimationEnd(Animator animation) {
                         LinearLayout view = rootViewRef.get();
                         if (view != null) view.setVisibility(View.INVISIBLE);
                         isShowing = false;
