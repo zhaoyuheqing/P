@@ -67,7 +67,6 @@ public class LiveSettingsPanel {
     private int currentScaleIndex = 0;
     private int currentPlayerTypeIndex = 0;
 
-    // Runnable 使用方法引用，简洁且安全（destroy 中会移除）
     private final Runnable hideRunnable = this::hideInternal;
     private final Runnable focusAndShowRunnable = this::focusAndShowInternal;
     private final Runnable requestLayoutRunnable = this::requestLayoutInternal;
@@ -88,9 +87,6 @@ public class LiveSettingsPanel {
         rootView.setVisibility(View.INVISIBLE);
     }
 
-    /**
-     * 初始化设置面板（必须在构造函数后调用）
-     */
     public void init() {
         initSettingGroups();
         initGroupView();
@@ -157,14 +153,14 @@ public class LiveSettingsPanel {
         // 恢复 Hawk 设置
         int timeout = Hawk.get(HawkConfig.LIVE_CONNECT_TIMEOUT, 2);
         if (settingGroups.size() > 3) {
-            var items = settingGroups.get(3).getLiveSettingItems();
+            ArrayList<LiveSettingItem> items = settingGroups.get(3).getLiveSettingItems();
             if (timeout >= 0 && timeout < items.size()) {
                 items.get(timeout).setItemSelected(true);
             }
         }
 
         if (settingGroups.size() > 4) {
-            var prefItems = settingGroups.get(4).getLiveSettingItems();
+            ArrayList<LiveSettingItem> prefItems = settingGroups.get(4).getLiveSettingItems();
             if (prefItems.size() > 0) prefItems.get(0).setItemSelected(Hawk.get(HawkConfig.LIVE_SHOW_TIME, false));
             if (prefItems.size() > 1) prefItems.get(1).setItemSelected(Hawk.get(HawkConfig.LIVE_SHOW_NET_SPEED, false));
             if (prefItems.size() > 2) prefItems.get(2).setItemSelected(Hawk.get(HawkConfig.LIVE_CHANNEL_REVERSE, false));
@@ -184,8 +180,18 @@ public class LiveSettingsPanel {
 
         groupView.setOnItemListener(new TvRecyclerView.OnItemListener() {
             @Override
+            public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {
+                // 不需要处理
+            }
+
+            @Override
             public void onItemSelected(TvRecyclerView parent, View itemView, int position) {
                 selectGroup(position, true);
+            }
+
+            @Override
+            public void onItemClick(TvRecyclerView parent, View itemView, int position) {
+                // 由 Adapter 的 OnItemClickListener 处理
             }
         });
 
@@ -207,6 +213,11 @@ public class LiveSettingsPanel {
         itemView.setAdapter(itemAdapter);
 
         itemView.setOnItemListener(new TvRecyclerView.OnItemListener() {
+            @Override
+            public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {
+                // 不需要处理
+            }
+
             @Override
             public void onItemSelected(TvRecyclerView parent, View itemView, int position) {
                 if (position < 0) return;
@@ -247,7 +258,7 @@ public class LiveSettingsPanel {
             case 0:
                 if (currentChannel != null && itemAdapter != null) {
                     int idx = currentChannel.getSourceIndex();
-                    var data = itemAdapter.getData();
+                    ArrayList<LiveSettingItem> data = itemAdapter.getData();
                     if (idx >= 0 && data != null && idx < data.size()) {
                         itemAdapter.selectItem(idx, true, false);
                     }
@@ -371,9 +382,6 @@ public class LiveSettingsPanel {
         isShowing = true;
     }
 
-    /**
-     * 内部焦点显示逻辑（同时检查 groupView 和 itemView）
-     */
     private void focusAndShowInternal() {
         TvRecyclerView groupView = groupViewRef.get();
         TvRecyclerView itemView = itemViewRef.get();
@@ -384,7 +392,7 @@ public class LiveSettingsPanel {
             return;
         }
 
-        // 检查 groupView 和 itemView 的滚动状态（采纳版本 B 的改进）
+        // 检查 groupView 和 itemView 的滚动状态
         boolean isScrolling = groupView.isScrolling() ||
                 (itemView != null && itemView.isScrolling()) ||
                 groupView.isComputingLayout() ||
@@ -396,8 +404,8 @@ public class LiveSettingsPanel {
         }
 
         // 请求焦点到分组列表
-        if (groupAdapter != null && groupView.getAdapter() != null && 
-            groupView.getAdapter().getItemCount() > 0) {
+        if (groupAdapter != null && groupView.getAdapter() != null &&
+                groupView.getAdapter().getItemCount() > 0) {
             groupView.scrollToPosition(0);
             groupView.setSelection(0);
             groupView.requestFocus();
@@ -525,12 +533,10 @@ public class LiveSettingsPanel {
     // ==================== 资源清理 ====================
 
     public void destroy() {
-        // 移除所有 Handler 回调
         handler.removeCallbacks(hideRunnable);
         handler.removeCallbacks(focusAndShowRunnable);
         handler.removeCallbacks(requestLayoutRunnable);
 
-        // 清理 Adapter
         if (groupAdapter != null) {
             groupAdapter.setNewData(null);
             groupAdapter = null;
@@ -540,13 +546,11 @@ public class LiveSettingsPanel {
             itemAdapter = null;
         }
 
-        // 清理监听器和数据
         listener = null;
         currentChannel = null;
         settingGroups.clear();
         isShowing = false;
 
-        // 隐藏面板
         LinearLayout root = rootViewRef.get();
         if (root != null && root.getVisibility() == View.VISIBLE) {
             root.setVisibility(View.INVISIBLE);
