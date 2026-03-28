@@ -26,16 +26,10 @@ import com.orhanobut.hawk.Hawk;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * 直播设置面板管理类
- * 
- * 使用方法：
- * 1. 在 Activity init() 中 findViewById 得到三个 View
- * 2. new LiveSettingsPanel(context, handler, rootView, groupView, itemView)
- * 3. 调用 panel.init()
- * 4. 设置 listener
- * 5. 调用 show()/hide()
  */
 public class LiveSettingsPanel {
 
@@ -67,9 +61,26 @@ public class LiveSettingsPanel {
     private int currentScaleIndex = 0;
     private int currentPlayerTypeIndex = 0;
 
-    private final Runnable hideRunnable = this::hideInternal;
-    private final Runnable focusAndShowRunnable = this::focusAndShowInternal;
-    private final Runnable requestLayoutRunnable = this::requestLayoutInternal;
+    private final Runnable hideRunnable = new Runnable() {
+        @Override
+        public void run() {
+            hideInternal();
+        }
+    };
+
+    private final Runnable focusAndShowRunnable = new Runnable() {
+        @Override
+        public void run() {
+            focusAndShowInternal();
+        }
+    };
+
+    private final Runnable requestLayoutRunnable = new Runnable() {
+        @Override
+        public void run() {
+            requestLayoutInternal();
+        }
+    };
 
     public LiveSettingsPanel(@NonNull Context context,
                              @NonNull Handler handler,
@@ -83,7 +94,6 @@ public class LiveSettingsPanel {
         this.groupViewRef = new WeakReference<>(groupView);
         this.itemViewRef = new WeakReference<>(itemView);
 
-        // 默认隐藏
         rootView.setVisibility(View.INVISIBLE);
     }
 
@@ -108,12 +118,9 @@ public class LiveSettingsPanel {
     }
 
     private void updateItemSelectionIfNeeded(int groupIndex, int itemIndex) {
-        if (!isShowing) return;
-        if (groupAdapter == null || itemAdapter == null) return;
+        if (!isShowing || groupAdapter == null || itemAdapter == null) return;
         if (groupAdapter.getSelectedGroupIndex() != groupIndex) return;
 
-        TvRecyclerView itemView = itemViewRef.get();
-        if (itemView == null) return;
         itemAdapter.selectItem(itemIndex, true, false);
     }
 
@@ -125,13 +132,13 @@ public class LiveSettingsPanel {
         ));
 
         ArrayList<ArrayList<String>> itemsArrayList = new ArrayList<>();
-        itemsArrayList.add(new ArrayList<>()); // 线路选择
+        itemsArrayList.add(new ArrayList<>()); // 线路选择（动态填充）
         itemsArrayList.add(new ArrayList<>(Arrays.asList("默认", "16:9", "4:3", "填充", "原始", "裁剪")));
         itemsArrayList.add(new ArrayList<>(Arrays.asList("系统", "ijk硬解", "ijk软解", "exo")));
         itemsArrayList.add(new ArrayList<>(Arrays.asList("关", "5s", "10s", "15s", "20s", "25s", "30s")));
         itemsArrayList.add(new ArrayList<>(Arrays.asList("显示时间", "显示网速", "换台反转", "跨选分类", "关闭密码")));
         itemsArrayList.add(new ArrayList<>(Arrays.asList("列表历史")));
-        itemsArrayList.add(new ArrayList<>(Arrays.asList("确定")));
+        itemsArrayList.add(new ArrayList<>(Arrays.asList("确定退出")));
 
         settingGroups.clear();
         for (int i = 0; i < groupNames.size(); i++) {
@@ -150,18 +157,21 @@ public class LiveSettingsPanel {
             settingGroups.add(group);
         }
 
-        // 恢复 Hawk 设置
+        restoreHawkSettings();
+    }
+
+    private void restoreHawkSettings() {
         int timeout = Hawk.get(HawkConfig.LIVE_CONNECT_TIMEOUT, 2);
         if (settingGroups.size() > 3) {
-            ArrayList<LiveSettingItem> items = settingGroups.get(3).getLiveSettingItems();
+            List<LiveSettingItem> items = settingGroups.get(3).getLiveSettingItems();
             if (timeout >= 0 && timeout < items.size()) {
                 items.get(timeout).setItemSelected(true);
             }
         }
 
         if (settingGroups.size() > 4) {
-            ArrayList<LiveSettingItem> prefItems = settingGroups.get(4).getLiveSettingItems();
-            if (prefItems.size() > 0) prefItems.get(0).setItemSelected(Hawk.get(HawkConfig.LIVE_SHOW_TIME, false));
+            List<LiveSettingItem> prefItems = settingGroups.get(4).getLiveSettingItems();
+            if (!prefItems.isEmpty()) prefItems.get(0).setItemSelected(Hawk.get(HawkConfig.LIVE_SHOW_TIME, false));
             if (prefItems.size() > 1) prefItems.get(1).setItemSelected(Hawk.get(HawkConfig.LIVE_SHOW_NET_SPEED, false));
             if (prefItems.size() > 2) prefItems.get(2).setItemSelected(Hawk.get(HawkConfig.LIVE_CHANNEL_REVERSE, false));
             if (prefItems.size() > 3) prefItems.get(3).setItemSelected(Hawk.get(HawkConfig.LIVE_CROSS_GROUP, false));
@@ -175,14 +185,14 @@ public class LiveSettingsPanel {
 
         groupView.setHasFixedSize(true);
         groupView.setLayoutManager(new V7LinearLayoutManager(groupView.getContext(), 1, false));
+
         groupAdapter = new LiveSettingGroupAdapter();
         groupView.setAdapter(groupAdapter);
+        groupAdapter.setNewData(settingGroups);
 
         groupView.setOnItemListener(new TvRecyclerView.OnItemListener() {
             @Override
-            public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {
-                // 不需要处理
-            }
+            public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {}
 
             @Override
             public void onItemSelected(TvRecyclerView parent, View itemView, int position) {
@@ -190,17 +200,13 @@ public class LiveSettingsPanel {
             }
 
             @Override
-            public void onItemClick(TvRecyclerView parent, View itemView, int position) {
-                // 由 Adapter 的 OnItemClickListener 处理
-            }
+            public void onItemClick(TvRecyclerView parent, View itemView, int position) {}
         });
 
         groupAdapter.setOnItemClickListener((adapter, view, position) -> {
             FastClickCheckUtil.check(view);
             selectGroup(position, false);
         });
-
-        groupAdapter.setNewData(settingGroups);
     }
 
     private void initItemView() {
@@ -209,20 +215,20 @@ public class LiveSettingsPanel {
 
         itemView.setHasFixedSize(true);
         itemView.setLayoutManager(new V7LinearLayoutManager(itemView.getContext(), 1, false));
+
         itemAdapter = new LiveSettingItemAdapter();
         itemView.setAdapter(itemAdapter);
 
         itemView.setOnItemListener(new TvRecyclerView.OnItemListener() {
             @Override
-            public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {
-                // 不需要处理
-            }
+            public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {}
 
             @Override
             public void onItemSelected(TvRecyclerView parent, View itemView, int position) {
                 if (position < 0) return;
                 if (groupAdapter != null) groupAdapter.setFocusedGroupIndex(-1);
                 if (itemAdapter != null) itemAdapter.setFocusedItemIndex(position);
+
                 handler.removeCallbacks(hideRunnable);
                 handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_SETTINGS_MS);
             }
@@ -242,36 +248,26 @@ public class LiveSettingsPanel {
     // ==================== 选择逻辑 ====================
 
     private void selectGroup(int position, boolean focus) {
-        if (position < 0 || position >= settingGroups.size()) return;
-        if (groupAdapter == null || itemAdapter == null) return;
+        if (position < 0 || position >= settingGroups.size() || groupAdapter == null || itemAdapter == null) return;
 
         if (focus) {
             groupAdapter.setFocusedGroupIndex(position);
             itemAdapter.setFocusedItemIndex(-1);
         }
-        if (position == groupAdapter.getSelectedGroupIndex()) return;
 
         groupAdapter.setSelectedGroupIndex(position);
         itemAdapter.setNewData(settingGroups.get(position).getLiveSettingItems());
 
-        switch (position) {
-            case 0:
-                if (currentChannel != null && itemAdapter != null) {
-                    int idx = currentChannel.getSourceIndex();
-                    ArrayList<LiveSettingItem> data = itemAdapter.getData();
-                    if (idx >= 0 && data != null && idx < data.size()) {
-                        itemAdapter.selectItem(idx, true, false);
-                    }
-                }
-                break;
-            case 1:
-                if (itemAdapter != null) itemAdapter.selectItem(currentScaleIndex, true, true);
-                break;
-            case 2:
-                if (itemAdapter != null) itemAdapter.selectItem(currentPlayerTypeIndex, true, true);
-                break;
-            default:
-                break;
+        if (position == 0 && currentChannel != null) {
+            int idx = currentChannel.getSourceIndex();
+            List<LiveSettingItem> data = itemAdapter.getData();   // 这里改用 List
+            if (idx >= 0 && data != null && idx < data.size()) {
+                itemAdapter.selectItem(idx, true, false);
+            }
+        } else if (position == 1) {
+            itemAdapter.selectItem(currentScaleIndex, true, true);
+        } else if (position == 2) {
+            itemAdapter.selectItem(currentPlayerTypeIndex, true, true);
         }
 
         int scrollPos = itemAdapter.getSelectedItemIndex();
@@ -288,47 +284,46 @@ public class LiveSettingsPanel {
         if (groupAdapter == null || itemAdapter == null) return;
 
         int groupIndex = groupAdapter.getSelectedGroupIndex();
+        if (groupIndex < 0 || groupIndex >= settingGroups.size()) return;
 
         if (groupIndex == 0 && currentChannel == null) {
             showToast("当前无直播源，无法切换线路");
             return;
         }
 
-        // 线路选择、画面比例、播放解码：需要更新选中状态
         if (groupIndex < 4) {
-            if (position == itemAdapter.getSelectedItemIndex()) return;
             itemAdapter.selectItem(position, true, true);
         }
 
+        if (listener == null) return;
+
         switch (groupIndex) {
             case 0:
-                if (currentChannel != null && listener != null) {
+                if (currentChannel != null) {
                     currentChannel.setSourceIndex(position);
                     listener.onSourceChanged(position);
                 }
                 break;
             case 1:
                 currentScaleIndex = position;
-                if (listener != null) listener.onScaleChanged(position);
+                listener.onScaleChanged(position);
                 break;
             case 2:
                 currentPlayerTypeIndex = position;
-                if (listener != null) listener.onPlayerTypeChanged(position);
+                listener.onPlayerTypeChanged(position);
                 break;
             case 3:
-                if (listener != null) listener.onTimeoutChanged(position);
+                listener.onTimeoutChanged(position);
                 Hawk.put(HawkConfig.LIVE_CONNECT_TIMEOUT, position);
                 break;
             case 4:
                 handlePreferenceChange(position);
                 break;
             case 5:
-                if (position == 0 && listener != null) listener.onLiveAddressSelected();
+                if (position == 0) listener.onLiveAddressSelected();
                 break;
             case 6:
-                if (position == 0 && listener != null) listener.onExit();
-                break;
-            default:
+                if (position == 0) listener.onExit();
                 break;
         }
 
@@ -337,26 +332,23 @@ public class LiveSettingsPanel {
     }
 
     private void handlePreferenceChange(int position) {
-        boolean select = false;
         String key = null;
-
         switch (position) {
             case 0: key = HawkConfig.LIVE_SHOW_TIME; break;
             case 1: key = HawkConfig.LIVE_SHOW_NET_SPEED; break;
             case 2: key = HawkConfig.LIVE_CHANNEL_REVERSE; break;
             case 3: key = HawkConfig.LIVE_CROSS_GROUP; break;
             case 4: key = HawkConfig.LIVE_SKIP_PASSWORD; break;
-            default: return;
         }
+        if (key == null) return;
 
-        if (key != null) {
-            select = !Hawk.get(key, false);
-            Hawk.put(key, select);
-            if (listener != null) listener.onPreferenceChanged(key, select);
-        }
+        boolean newValue = !Hawk.get(key, false);
+        Hawk.put(key, newValue);
+
+        if (listener != null) listener.onPreferenceChanged(key, newValue);
 
         if (itemAdapter != null) {
-            itemAdapter.selectItem(position, select, false);
+            itemAdapter.selectItem(position, newValue, false);
         }
     }
 
@@ -364,7 +356,6 @@ public class LiveSettingsPanel {
 
     public void show() {
         if (isShowing) {
-            // 已显示，只刷新隐藏计时器
             handler.removeCallbacks(hideRunnable);
             handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_SETTINGS_MS);
             return;
@@ -384,7 +375,6 @@ public class LiveSettingsPanel {
 
     private void focusAndShowInternal() {
         TvRecyclerView groupView = groupViewRef.get();
-        TvRecyclerView itemView = itemViewRef.get();
         LinearLayout rootView = rootViewRef.get();
 
         if (groupView == null || rootView == null) {
@@ -392,29 +382,19 @@ public class LiveSettingsPanel {
             return;
         }
 
-        // 检查 groupView 和 itemView 的滚动状态
-        boolean isScrolling = groupView.isScrolling() ||
-                (itemView != null && itemView.isScrolling()) ||
-                groupView.isComputingLayout() ||
-                (itemView != null && itemView.isComputingLayout());
-
+        boolean isScrolling = groupView.isScrolling() || groupView.isComputingLayout();
         if (isScrolling) {
             handler.postDelayed(focusAndShowRunnable, 100);
             return;
         }
 
-        // 请求焦点到分组列表
-        if (groupAdapter != null && groupView.getAdapter() != null &&
-                groupView.getAdapter().getItemCount() > 0) {
-            groupView.scrollToPosition(0);
-            groupView.setSelection(0);
-            groupView.requestFocus();
-        }
+        groupView.scrollToPosition(0);
+        groupView.setSelection(0);
+        groupView.requestFocus();
 
-        // 显示动画
         rootView.setVisibility(View.VISIBLE);
         rootView.setAlpha(0.0f);
-        rootView.setTranslationX(rootView.getWidth() / 2);
+        rootView.setTranslationX(rootView.getWidth() / 2f);
         rootView.animate()
                 .translationX(0)
                 .alpha(1.0f)
@@ -436,7 +416,7 @@ public class LiveSettingsPanel {
         if (rootView == null || rootView.getVisibility() != View.VISIBLE) return;
 
         rootView.animate()
-                .translationX(rootView.getWidth() / 2)
+                .translationX(rootView.getWidth() / 2f)
                 .alpha(0.0f)
                 .setDuration(250)
                 .setInterpolator(new DecelerateInterpolator())
@@ -451,19 +431,17 @@ public class LiveSettingsPanel {
                         if (groupAdapter != null) {
                             groupAdapter.setSelectedGroupIndex(-1);
                         }
+                        isShowing = false;
                     }
                 });
 
         handler.removeCallbacks(hideRunnable);
-        isShowing = false;
     }
 
     private void requestLayoutInternal() {
         LinearLayout root = rootViewRef.get();
         if (root != null) root.requestLayout();
     }
-
-    // ==================== 数据更新 ====================
 
     public void updateSourceList(LiveChannelItem channel) {
         this.currentChannel = channel;
@@ -476,13 +454,12 @@ public class LiveSettingsPanel {
         LiveSettingGroup sourceGroup = settingGroups.get(0);
         if (sourceGroup == null) return;
 
-        if (currentChannel == null) {
-            ArrayList<LiveSettingItem> emptyList = new ArrayList<>();
-            LiveSettingItem emptyItem = new LiveSettingItem();
-            emptyItem.setItemIndex(0);
-            emptyItem.setItemName("无可用线路");
-            emptyList.add(emptyItem);
-            sourceGroup.setLiveSettingItems(emptyList);
+        if (currentChannel == null || currentChannel.getChannelSourceNames() == null) {
+            ArrayList<LiveSettingItem> empty = new ArrayList<>();
+            LiveSettingItem item = new LiveSettingItem();
+            item.setItemName("无可用线路");
+            empty.add(item);
+            sourceGroup.setLiveSettingItems(empty);
             return;
         }
 
@@ -496,7 +473,6 @@ public class LiveSettingsPanel {
         }
         sourceGroup.setLiveSettingItems(itemList);
 
-        // 如果面板正在显示且当前在线路选择分组，刷新显示
         if (isShowing && groupAdapter != null && groupAdapter.getSelectedGroupIndex() == 0 && itemAdapter != null) {
             itemAdapter.setNewData(itemList);
             int idx = currentChannel.getSourceIndex();
@@ -521,16 +497,12 @@ public class LiveSettingsPanel {
         return isShowing;
     }
 
-    // ==================== 辅助方法 ====================
-
     private void showToast(String message) {
         Context ctx = contextRef.get();
         if (ctx != null) {
             Toast.makeText(ctx, message, Toast.LENGTH_SHORT).show();
         }
     }
-
-    // ==================== 资源清理 ====================
 
     public void destroy() {
         handler.removeCallbacks(hideRunnable);
