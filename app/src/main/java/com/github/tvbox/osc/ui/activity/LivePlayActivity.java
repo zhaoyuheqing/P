@@ -86,7 +86,7 @@ import xyz.doikki.videoplayer.util.PlayerUtils;
 
 /**
  * LivePlayActivity - 最终修复版
- * 已修复：确定键弹出 EPG 节目信息列表、EPG 回放显示、视图互斥、EPG 视图切换调用
+ * 已修复：确定键弹出 EPG 节目信息列表 + EPG 回放列表、视图互斥
  */
 public class LivePlayActivity extends BaseActivity {
 
@@ -636,8 +636,7 @@ public class LivePlayActivity extends BaseActivity {
                     case KeyEvent.KEYCODE_DPAD_CENTER:
                     case KeyEvent.KEYCODE_ENTER:
                     case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
-                        // 关键修复：确定键调用 toggleChannelInfo()
-                        toggleChannelInfo();
+                        toggleChannelInfo();   // 关键修复：确定键调用 toggleChannelInfo()
                         break;
                     default:
                         if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
@@ -849,6 +848,9 @@ public class LivePlayActivity extends BaseActivity {
         mHandler.postDelayed(mUpdateLayout, 300);
     }
 
+    /**
+     * 切换节目信息显示（关键修复：同时控制底部信息栏和 EPG 视图）
+     */
     private void toggleChannelInfo() {
         // 1. 先隐藏其他面板
         if (channelListPanel != null && channelListPanel.isShowing()) {
@@ -858,20 +860,37 @@ public class LivePlayActivity extends BaseActivity {
             settingsPanel.hide();
         }
         
-        // 2. 切换底部信息栏显示/隐藏
+        // 2. 切换底部信息栏显示/隐藏，同时控制 EPG 视图
         if (tvBottomLayout.getVisibility() == View.INVISIBLE) {
+            // 显示底部信息栏
             showChannelInfo();
+            // 同时显示 EPG 节目列表（关键修复）
+            mEpgInfoGridView.setVisibility(View.VISIBLE);
+            mGroupEPG.setVisibility(View.VISIBLE);
+            mDivLeft.setVisibility(View.VISIBLE);
+            mDivRight.setVisibility(View.GONE);
+            // 隐藏频道列表容器，避免遮挡
+            View leftContainer = findViewById(R.id.tvLeftChannelListLayout);
+            if (leftContainer != null) {
+                leftContainer.setVisibility(View.INVISIBLE);
+            }
+            // 刷新 EPG 数据
+            if (currentLiveChannelItem != null) {
+                Date selectedDate = epgDateAdapter.getSelectedIndex() < 0 ? new Date() :
+                        epgDateAdapter.getData().get(epgDateAdapter.getSelectedIndex()).getDateParamVal();
+                getEpg(selectedDate);
+            }
         } else {
+            // 隐藏底部信息栏
             mBack.setVisibility(View.INVISIBLE);
             mHandler.removeCallbacks(mHideChannelInfoRun);
             mHandler.post(mHideChannelInfoRun);
-        }
-        
-        // 3. 如果 EPG 视图可见，刷新数据
-        if (mEpgInfoGridView.getVisibility() == View.VISIBLE && currentLiveChannelItem != null) {
-            Date selectedDate = epgDateAdapter.getSelectedIndex() < 0 ? new Date() :
-                    epgDateAdapter.getData().get(epgDateAdapter.getSelectedIndex()).getDateParamVal();
-            getEpg(selectedDate);
+            
+            // 同时隐藏 EPG 节目列表
+            mEpgInfoGridView.setVisibility(View.GONE);
+            mGroupEPG.setVisibility(View.GONE);
+            mDivLeft.setVisibility(View.GONE);
+            mDivRight.setVisibility(View.VISIBLE);
         }
     }
 
