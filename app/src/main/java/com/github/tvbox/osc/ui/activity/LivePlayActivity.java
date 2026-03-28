@@ -89,14 +89,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TimeZone;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
 import kotlin.Pair;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
 import xyz.doikki.videoplayer.player.VideoView;
 import xyz.doikki.videoplayer.util.PlayerUtils;
 
@@ -122,19 +116,37 @@ import xyz.doikki.videoplayer.util.PlayerUtils;
  *   - 2.1 播放请求头
  *   - 2.2 时移URL构建
  * 
- * 区域3: EPG获取和预加载（使用 EpgCacheHelper）
+ * 区域3: EPG获取和预加载
  * 
  * 区域4: 生命周期方法
  * 
  * 区域5: UI显示方法
+ *   - 5.1 频道列表显示/隐藏
+ *   - 5.2 频道信息显示/隐藏
+ *   - 5.3 EPG显示
+ *   - 5.4 底部信息栏
  * 
  * 区域6: 播放控制方法
+ *   - 6.1 频道播放
+ *   - 6.2 换台/换源
  * 
  * 区域7: 设置面板方法
+ *   - 7.1 设置面板显示/隐藏
+ *   - 7.2 设置项点击处理
  * 
  * 区域8: 初始化方法
+ *   - 8.1 EPG列表初始化
+ *   - 8.2 频道列表初始化
+ *   - 8.3 设置面板初始化
+ *   - 8.4 播放器初始化
+ *   - 8.5 数据加载
  * 
  * 区域9: 辅助方法
+ *   - 9.1 频道数据获取
+ *   - 9.2 密码验证
+ *   - 9.3 时间/网速显示
+ *   - 9.4 数字键换台
+ *   - 9.5 其他辅助
  * 
  * ====================================================
  */
@@ -501,10 +513,21 @@ public class LivePlayActivity extends BaseActivity {
         if (currentLiveChannelItem == null || currentLiveChannelItem.getChannelName() == null) return;
         
         final String channelName = currentLiveChannelItem.getChannelName();
+        SimpleDateFormat sdf = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD);
+        final String dateStr = sdf.format(date);
+        
+        // 先尝试同步获取缓存
+        ArrayList<Epginfo> cached = epgCacheHelper.getCachedEpg(channelName, dateStr);
+        if (cached != null && !cached.isEmpty()) {
+            showEpg(date, cached);
+            showBottomEpg();
+            return;
+        }
+        
+        // 无缓存，异步请求
         epgCacheHelper.requestEpg(channelName, date, new EpgCacheHelper.EpgCallback() {
             @Override
             public void onSuccess(String channelName, Date date, ArrayList<Epginfo> epgList) {
-                // 确保还是当前频道
                 if (currentLiveChannelItem != null && channelName.equals(currentLiveChannelItem.getChannelName())) {
                     showEpg(date, epgList);
                     showBottomEpg();
@@ -864,7 +887,8 @@ public class LivePlayActivity extends BaseActivity {
                 mEpgInfoGridView.post(() -> mEpgInfoGridView.smoothScrollToPosition(finalI));
             }
         } else {
-            Epginfo epgbcinfo = new Epginfo(date, LiveConstants.NO_PROGRAM, date, LiveConstants.DEFAULT_START_TIME, LiveConstants.DEFAULT_END_TIME, 0);
+            Epginfo epgbcinfo = new Epginfo(date, LiveConstants.NO_PROGRAM, date, 
+                    LiveConstants.DEFAULT_START_TIME, LiveConstants.DEFAULT_END_TIME, 0);
             arrayList.add(epgbcinfo);
             epgdata = arrayList;
             epgListAdapter.setNewData(epgdata);
@@ -1763,6 +1787,7 @@ public class LivePlayActivity extends BaseActivity {
             }
             selectChannelGroup(lastChannelGroupIndex, false, lastLiveChannelIndex);
             
+            // 延迟启动其他频道预加载
             if (epgCacheHelper != null && currentLiveChannelItem != null) {
                 List<String> allChannelNames = new ArrayList<>();
                 for (LiveChannelGroup group : liveChannelGroupList) {
