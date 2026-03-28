@@ -21,6 +21,7 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -31,16 +32,12 @@ import java.util.concurrent.atomic.AtomicLong;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 
-/**
- * EPG缓存和网络请求管理类
- * 负责：内存缓存、文件缓存、网络请求、预加载调度
- */
 public class EpgCacheHelper {
     private final Context context;
     private final Handler mainHandler;
     private String epgBaseUrl;
     
-    // ==================== 缓存相关 ====================
+    // ========== 缓存 ==========
     private final Map<String, ArrayList<Epginfo>> memoryCache = new LinkedHashMap<String, ArrayList<Epginfo>>() {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, ArrayList<Epginfo>> eldest) {
@@ -51,14 +48,13 @@ public class EpgCacheHelper {
     private final Set<String> pendingRequests = new HashSet<>();
     private final AtomicLong currentChannelRequestId = new AtomicLong(0);
     
-    // ==================== 线程池 ====================
-    private ExecutorService highPriorityExecutor;  // 当前频道专用
-    private ExecutorService lowPriorityExecutor;   // 其他频道预加载
+    // ========== 线程池 ==========
+    private ExecutorService highPriorityExecutor;
+    private ExecutorService lowPriorityExecutor;
     
-    // ==================== HTTP客户端 ====================
+    // ========== HTTP客户端 ==========
     private OkHttpClient httpClient;
     
-    // ==================== 构造函数 ====================
     public EpgCacheHelper(Context context, String epgBaseUrl) {
         this.context = context;
         this.mainHandler = new Handler(Looper.getMainLooper());
@@ -67,13 +63,28 @@ public class EpgCacheHelper {
         this.lowPriorityExecutor = Executors.newFixedThreadPool(LiveConstants.LOW_PRIORITY_THREADS);
     }
     
-    // ==================== 公开接口 ====================
+    // ========== 公开方法 ==========
     
     /**
-     * 请求 EPG 数据（优先缓存，无则网络）
-     * @param channelName 频道名
-     * @param date 日期
-     * @param callback 回调（在主线程执行）
+     * 同步获取缓存中的EPG数据（不触发网络请求）
+     */
+    public ArrayList<Epginfo> getCachedEpg(String channelName, String dateStr) {
+        // 1. 内存缓存
+        ArrayList<Epginfo> cached = getFromMemoryCache(channelName, dateStr);
+        if (cached != null && !cached.isEmpty()) {
+            return cached;
+        }
+        // 2. 文件缓存
+        cached = getFromFileCache(channelName, dateStr);
+        if (cached != null && !cached.isEmpty()) {
+            putToMemoryCache(channelName, dateStr, cached);
+            return cached;
+        }
+        return null;
+    }
+    
+    /**
+     * 请求EPG数据（优先缓存，无则网络）
      */
     public void requestEpg(String channelName, Date date, EpgCallback callback) {
         if (channelName == null || date == null || callback == null) return;
@@ -84,7 +95,10 @@ public class EpgCacheHelper {
         // 1. 内存缓存
         ArrayList<Epginfo> cached = getFromMemoryCache(channelName, dateStr);
         if (cached != null && !cached.isEmpty()) {
-            mainHandler.post(() -> callback.onSuccess(channelName, date, cached));
+            final String finalChannelName = channelName;
+            final Date finalDate = date;
+            final ArrayList<Epginfo> finalCached = cached;
+            mainHandler.post(() -> callback.onSuccess(finalChannelName, finalDate, finalCached));
             return;
         }
         
@@ -92,25 +106,30 @@ public class EpgCacheHelper {
         cached = getFromFileCache(channelName, dateStr);
         if (cached != null && !cached.isEmpty()) {
             putToMemoryCache(channelName, dateStr, cached);
-            mainHandler.post(() -> callback.onSuccess(channelName, date, cached));
+            final String finalChannelName = channelName;
+            final Date finalDate = date;
+            final ArrayList<Epginfo> finalCached = cached;
+            mainHandler.post(() -> callback.onSuccess(finalChannelName, finalDate, finalCached));
             return;
         }
         
-        // 3. 网络请求（异步）
+        // 3. 网络请求
         final long requestId = currentChannelRequestId.incrementAndGet();
+        final String reqChannelName = channelName;
+        final Date reqDate = date;
+        final String reqDateStr = dateStr;
         highPriorityExecutor.execute(() -> {
-            fetchFromNetwork(channelName, date, dateStr, requestId, callback);
+            fetchFromNetwork(reqChannelName, reqDate, reqDateStr, requestId, callback);
         });
     }
     
     /**
      * 预加载当前频道的所有日期
-     * @param channelName 频道名
      */
     public void preloadCurrentChannel(String channelName) {
         if (channelName == null) return;
         
-        final List<String> dates = getPreloadDates();
+        List<String> dates = getPreloadDates();
         highPriorityExecutor.execute(() -> {
             for (String dateStr : dates) {
                 String taskKey = channelName + "_" + dateStr;
@@ -121,7 +140,6 @@ public class EpgCacheHelper {
                 try {
                     SimpleDateFormat sdf = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD);
                     Date date = sdf.parse(dateStr);
-                    // 预加载不需要更新UI，传 null callback
                     fetchFromNetwork(channelName, date, dateStr, 0, null);
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -130,24 +148,18 @@ public class EpgCacheHelper {
                         pendingRequests.remove(taskKey);
                     }
                 }
-                try {
-                    Thread.sleep(LiveConstants.PRELOAD_SLEEP_MS);
-                } catch (InterruptedException e) {
-                    break;
-                }
+                try { Thread.sleep(LiveConstants.PRELOAD_SLEEP_MS); } catch (InterruptedException e) { break; }
             }
         });
     }
     
     /**
-     * 预加载其他频道的 EPG
-     * @param channelNames 所有频道名列表
-     * @param currentChannelName 当前频道名（跳过）
+     * 预加载其他频道（所有日期）
      */
     public void preloadOtherChannels(List<String> channelNames, String currentChannelName) {
         if (channelNames == null || channelNames.isEmpty()) return;
         
-        final List<String> dates = getPreloadDates();
+        List<String> dates = getPreloadDates();
         lowPriorityExecutor.execute(() -> {
             for (String channelName : channelNames) {
                 if (channelName.equals(currentChannelName)) continue;
@@ -168,25 +180,14 @@ public class EpgCacheHelper {
                             pendingRequests.remove(taskKey);
                         }
                     }
-                    try {
-                        Thread.sleep(LiveConstants.PRELOAD_OTHER_SLEEP_MS);
-                    } catch (InterruptedException e) {
-                        break;
-                    }
+                    try { Thread.sleep(LiveConstants.PRELOAD_OTHER_SLEEP_MS); } catch (InterruptedException e) { break; }
                 }
             }
         });
     }
     
     /**
-     * 更新 EPG 基础 URL（用于动态切换源）
-     */
-    public void updateBaseUrl(String newUrl) {
-        this.epgBaseUrl = newUrl;
-    }
-    
-    /**
-     * 清理资源（在 Activity onDestroy 中调用）
+     * 清理资源
      */
     public void destroy() {
         if (highPriorityExecutor != null && !highPriorityExecutor.isShutdown()) {
@@ -207,15 +208,13 @@ public class EpgCacheHelper {
         }
     }
     
-    // ==================== 回调接口 ====================
     public interface EpgCallback {
         void onSuccess(String channelName, Date date, ArrayList<Epginfo> epgList);
         void onFailure(String channelName, Date date, Exception e);
     }
     
-    // ==================== 私有方法 ====================
+    // ========== 私有方法 ==========
     
-    // ---------- 内存缓存 ----------
     private ArrayList<Epginfo> getFromMemoryCache(String channelName, String date) {
         String key = channelName + "_" + date;
         synchronized (cacheLock) {
@@ -231,13 +230,10 @@ public class EpgCacheHelper {
         }
     }
     
-    // ---------- 文件缓存 ----------
     private File getEpgCacheFile(String channelName, String date) {
         String fileName = channelName.replaceAll("[^a-zA-Z0-9\\u4e00-\\u9fa5]", "_") + "_" + date + ".json";
         File dir = new File(context.getFilesDir(), LiveConstants.EPG_CACHE_DIR);
-        if (!dir.exists()) {
-            dir.mkdirs();
-        }
+        if (!dir.exists()) dir.mkdirs();
         return new File(dir, fileName);
     }
     
@@ -259,7 +255,6 @@ public class EpgCacheHelper {
                 cacheFile.delete();
                 return null;
             }
-            // logoUrl 在这里不处理，由调用方决定是否使用
             JSONArray epgArray = cacheData.optJSONArray("epgList");
             if (epgArray == null || epgArray.length() == 0) return null;
             ArrayList<Epginfo> epgList = new ArrayList<>();
@@ -285,7 +280,6 @@ public class EpgCacheHelper {
         putToMemoryCache(channelName, date, newEpgList);
         lowPriorityExecutor.execute(() -> {
             try {
-                // 合并已有缓存（去重）
                 ArrayList<Epginfo> existingList = getFromFileCache(channelName, date);
                 Map<String, Epginfo> mergedMap = new LinkedHashMap<>();
                 if (existingList != null) {
@@ -329,8 +323,7 @@ public class EpgCacheHelper {
         });
     }
     
-    // ---------- HTTP 客户端 ----------
-    private synchronized OkHttpClient getHttpClient() {
+    private OkHttpClient getHttpClient() {
         if (httpClient == null) {
             httpClient = new OkHttpClient.Builder()
                     .connectTimeout(10, TimeUnit.SECONDS)
@@ -340,7 +333,6 @@ public class EpgCacheHelper {
         return httpClient;
     }
     
-    // ---------- 预加载日期 ----------
     private List<String> getPreloadDates() {
         List<String> dates = new ArrayList<>();
         SimpleDateFormat dateFormat = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD);
@@ -356,13 +348,12 @@ public class EpgCacheHelper {
     
     private Date parseDate(String dateStr) {
         try {
-            return new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD).parse(dateStr);
+            return new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD, Locale.getDefault()).parse(dateStr);
         } catch (Exception e) {
             return new Date();
         }
     }
     
-    // ---------- 网络请求核心方法 ----------
     private void fetchFromNetwork(String channelName, Date date, String dateStr, long requestId, EpgCallback callback) {
         try {
             SimpleDateFormat sdf = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD);
@@ -378,10 +369,10 @@ public class EpgCacheHelper {
             
             String epgUrl;
             if (epgBaseUrl.contains("{name}") && epgBaseUrl.contains("{date}")) {
-                epgUrl = epgBaseUrl.replace("{name}", URLEncoder.encode(epgTagName))
+                epgUrl = epgBaseUrl.replace("{name}", URLEncoder.encode(epgTagName, "UTF-8"))
                         .replace("{date}", sdf.format(date));
             } else {
-                epgUrl = epgBaseUrl + "?ch=" + URLEncoder.encode(epgTagName) + "&date=" + sdf.format(date);
+                epgUrl = epgBaseUrl + "?ch=" + URLEncoder.encode(epgTagName, "UTF-8") + "&date=" + sdf.format(date);
             }
             
             Request request = new Request.Builder().url(epgUrl).build();
@@ -411,9 +402,11 @@ public class EpgCacheHelper {
                     }
                     if (!arrayList.isEmpty()) {
                         saveToFileCache(channelName, dateStr, arrayList, logoUrl);
-                        // 只有 callback 不为 null 且 requestId 匹配时才回调 UI
                         if (callback != null && (requestId == 0 || requestId == currentChannelRequestId.get())) {
-                            mainHandler.post(() -> callback.onSuccess(channelName, date, arrayList));
+                            final String finalChannelName = channelName;
+                            final Date finalDate = date;
+                            final ArrayList<Epginfo> finalArrayList = arrayList;
+                            mainHandler.post(() -> callback.onSuccess(finalChannelName, finalDate, finalArrayList));
                         }
                     }
                 }
@@ -421,7 +414,10 @@ public class EpgCacheHelper {
         } catch (Exception e) {
             e.printStackTrace();
             if (callback != null) {
-                mainHandler.post(() -> callback.onFailure(channelName, date, e));
+                final String finalChannelName = channelName;
+                final Date finalDate = date;
+                final Exception finalException = e;
+                mainHandler.post(() -> callback.onFailure(finalChannelName, finalDate, finalException));
             }
         } finally {
             synchronized (pendingRequests) {
