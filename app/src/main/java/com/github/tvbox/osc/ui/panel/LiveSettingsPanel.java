@@ -30,6 +30,13 @@ import java.util.List;
 
 /**
  * 直播设置面板管理类
+ * 
+ * 使用方法：
+ * 1. 在 Activity init() 中 findViewById 得到三个 View
+ * 2. new LiveSettingsPanel(context, handler, rootView, groupView, itemView)
+ * 3. 调用 panel.init()
+ * 4. 设置 listener
+ * 5. 调用 show()/hide()
  */
 public class LiveSettingsPanel {
 
@@ -260,7 +267,7 @@ public class LiveSettingsPanel {
 
         if (position == 0 && currentChannel != null) {
             int idx = currentChannel.getSourceIndex();
-            List<LiveSettingItem> data = itemAdapter.getData();   // 这里改用 List
+            List<LiveSettingItem> data = itemAdapter.getData();
             if (idx >= 0 && data != null && idx < data.size()) {
                 itemAdapter.selectItem(idx, true, false);
             }
@@ -375,6 +382,7 @@ public class LiveSettingsPanel {
 
     private void focusAndShowInternal() {
         TvRecyclerView groupView = groupViewRef.get();
+        TvRecyclerView itemView = itemViewRef.get();
         LinearLayout rootView = rootViewRef.get();
 
         if (groupView == null || rootView == null) {
@@ -382,7 +390,12 @@ public class LiveSettingsPanel {
             return;
         }
 
-        boolean isScrolling = groupView.isScrolling() || groupView.isComputingLayout();
+        // 检查 groupView 和 itemView 的滚动状态（增强健壮性）
+        boolean isScrolling = groupView.isScrolling() ||
+                (itemView != null && itemView.isScrolling()) ||
+                groupView.isComputingLayout() ||
+                (itemView != null && itemView.isComputingLayout());
+
         if (isScrolling) {
             handler.postDelayed(focusAndShowRunnable, 100);
             return;
@@ -443,6 +456,8 @@ public class LiveSettingsPanel {
         if (root != null) root.requestLayout();
     }
 
+    // ==================== 数据更新 ====================
+
     public void updateSourceList(LiveChannelItem channel) {
         this.currentChannel = channel;
         refreshSourceListDisplay();
@@ -454,9 +469,11 @@ public class LiveSettingsPanel {
         LiveSettingGroup sourceGroup = settingGroups.get(0);
         if (sourceGroup == null) return;
 
+        // 增强 null 检查，防止崩溃
         if (currentChannel == null || currentChannel.getChannelSourceNames() == null) {
             ArrayList<LiveSettingItem> empty = new ArrayList<>();
             LiveSettingItem item = new LiveSettingItem();
+            item.setItemIndex(0);
             item.setItemName("无可用线路");
             empty.add(item);
             sourceGroup.setLiveSettingItems(empty);
@@ -503,6 +520,8 @@ public class LiveSettingsPanel {
             Toast.makeText(ctx, message, Toast.LENGTH_SHORT).show();
         }
     }
+
+    // ==================== 资源清理 ====================
 
     public void destroy() {
         handler.removeCallbacks(hideRunnable);
