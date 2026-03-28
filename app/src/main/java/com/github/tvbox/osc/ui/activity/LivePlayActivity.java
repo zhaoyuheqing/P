@@ -215,13 +215,13 @@ public class LivePlayActivity extends BaseActivity {
     private final LivePlayerManager livePlayerManager = new LivePlayerManager();
     private int currentLiveChangeSourceTimes = 0;
 
-    // ---------- 1.5 EPG相关变量 ----------
+        // ---------- 1.5 EPG相关变量 ----------
     private LiveEpgDateAdapter epgDateAdapter;
     private LiveEpgAdapter epgListAdapter;
     public String epgStringAddress = "";
     SimpleDateFormat timeFormat = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD);
     private final Handler mHandler = new Handler();
-    private static final Hashtable<String, ArrayList<Epginfo>> hsEpg = new Hashtable<>();
+    private static final Hashtable<String, List<Epginfo>> hsEpg = new Hashtable<>();
     private List<Epginfo> epgdata = new ArrayList<>();
     
     // ---------- 1.6 EPG缓存管理器 ----------
