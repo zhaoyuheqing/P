@@ -27,10 +27,8 @@ import java.util.List;
 /**
  * 左侧频道列表面板 - 最终稳定版
  * 修复：
- * - 高亮始终跟随当前播放频道
- * - 分组切换不改变播放状态
- * - EPG 模式状态机完整
- * - 添加 EPG 模式切换的平移动画
+ * - EPG 模式下点击分组自动切换回频道模式
+ * - 回放按钮直接显示 EPG 视图，无频道模式闪烁
  */
 public class LiveChannelListPanel {
 
@@ -58,8 +56,9 @@ public class LiveChannelListPanel {
 
     private ChannelListListener listener;
     private boolean isShowing = false;
-    private boolean isEpgMode = false;
+    private boolean isEpgMode = false;   // 当前是否处于 EPG 模式
 
+    // 保存当前选中的分组和频道索引（由外部同步）
     private int currentGroupIndex = 0;
     private int currentChannelIndex = -1;
 
@@ -129,8 +128,14 @@ public class LiveChannelListPanel {
 
     /**
      * 加载指定分组（仅刷新列表，不改变播放状态）
+     * 关键修复：如果当前是 EPG 模式，先切换回频道模式
      */
     public void loadGroup(int groupIndex, List<LiveChannelGroup> allGroups) {
+        // 如果当前是 EPG 模式，先切换回频道模式
+        if (isEpgMode) {
+            showChannelMode();
+        }
+
         if (groupAdapter != null) {
             groupAdapter.setSelectedGroupIndex(groupIndex);
         }
@@ -151,44 +156,77 @@ public class LiveChannelListPanel {
         }
     }
 
+    /**
+     * 切换到 EPG 模式（由 Activity 调用）
+     * 关键修复：当面板未显示时，直接以 EPG 模式显示，避免先显示频道模式
+     */
     public void showEpgMode() {
-        if (isEpgMode) return;
+        if (isEpgMode) {
+            handler.removeCallbacks(hideRunnable);
+            handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
+            return;
+        }
         isEpgMode = true;
 
-        if (listener != null) listener.onEpgModeRequest();
-
         if (!isShowing) {
-            show(); // 先显示面板（会执行频道模式动画）
+            // 直接显示面板，不经过 show() 的频道模式刷新
+            LinearLayout rootView = rootViewRef.get();
+            if (rootView != null) {
+                rootView.setVisibility(View.VISIBLE);
+                rootView.setAlpha(0.0f);
+                rootView.setTranslationX(-rootView.getWidth() / 2f);
+                rootView.animate()
+                        .translationX(0)
+                        .alpha(1.0f)
+                        .setDuration(250)
+                        .setInterpolator(new DecelerateInterpolator())
+                        .setListener(null);
+                isShowing = true;
+            }
+            if (listener != null) listener.onEpgModeRequest();
+            handler.removeCallbacks(hideRunnable);
+            handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
         } else {
+            if (listener != null) listener.onEpgModeRequest();
             handler.removeCallbacks(hideRunnable);
             handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
         }
     }
 
+    /**
+     * 切换回频道模式（由 Activity 调用）
+     */
     public void showChannelMode() {
-        if (!isEpgMode) return;
+        if (!isEpgMode) {
+            handler.removeCallbacks(hideRunnable);
+            handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
+            return;
+        }
         isEpgMode = false;
-
-        if (listener != null) listener.onChannelModeRequest();
-
         if (isShowing && listener != null) {
+            // 刷新频道列表数据
             refreshFull(listener.getChannelGroups(), listener.getCurrentGroupIndex(), listener.getCurrentChannelIndex());
+            listener.onChannelModeRequest();
             handler.removeCallbacks(hideRunnable);
             handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
         }
     }
 
+    /**
+     * 显示面板（频道模式，由 Activity 在确定键时调用）
+     * 确保显示时强制为频道模式
+     */
     public void show() {
         if (isShowing) {
             handler.removeCallbacks(hideRunnable);
             handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
             return;
         }
-
+        // 显示前强制重置为频道模式
+        isEpgMode = false;
         if (listener != null) {
             refreshFull(listener.getChannelGroups(), listener.getCurrentGroupIndex(), listener.getCurrentChannelIndex());
         }
-
         handler.postDelayed(focusAndShowRunnable, 200);
         isShowing = true;
     }
@@ -366,7 +404,8 @@ public class LiveChannelListPanel {
                     public void onAnimationEnd(Animator animation) {
                         rootView.setVisibility(View.INVISIBLE);
                         isShowing = false;
-                        isEpgMode = false;   // 重置模式
+                        // 隐藏时重置模式，因为隐藏后再次显示应该从频道模式开始
+                        isEpgMode = false;
                     }
                 });
 
