@@ -25,19 +25,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 左侧频道列表面板 - 最终稳定版
+ * 左侧频道列表面板 - 最终修复版
  * 修复：
- * - 显示时保留 EPG 模式状态，不强制重置为频道模式
- * - 隐藏时不重置 EPG 模式标志
- * - 分组点击正确切换模式
+ * - 显示面板时强制从 Activity 同步当前播放频道的高亮
+ * - 回放时不再切换面板模式或刷新 EPG 列表
  */
 public class LiveChannelListPanel {
 
     public interface ChannelListListener {
         void onGroupSelected(int groupIndex);
         void onChannelSelected(int groupIndex, int channelIndex);
-        void onEpgModeRequest();
-        void onChannelModeRequest();
+        void onEpgModeChanged(boolean isEpg);
+        void onShiyiPlaybackStarted();
         List<LiveChannelGroup> getChannelGroups();
         int getCurrentGroupIndex();
         int getCurrentChannelIndex();
@@ -52,12 +51,19 @@ public class LiveChannelListPanel {
     private final WeakReference<TvRecyclerView> groupViewRef;
     private final WeakReference<TvRecyclerView> channelViewRef;
 
+    // EPG相关视图
+    private final WeakReference<LinearLayout> groupEpgRef;
+    private final WeakReference<LinearLayout> divLeftRef;
+    private final WeakReference<LinearLayout> divRightRef;
+    private final WeakReference<TvRecyclerView> epgDateViewRef;
+    private final WeakReference<TvRecyclerView> epgInfoViewRef;
+
     private LiveChannelGroupAdapter groupAdapter;
     private LiveChannelItemAdapter channelAdapter;
 
     private ChannelListListener listener;
     private boolean isShowing = false;
-    private boolean isEpgMode = false;   // 当前是否处于 EPG 模式
+    private boolean isEpgMode = false;
 
     private int currentGroupIndex = 0;
     private int currentChannelIndex = -1;
@@ -69,13 +75,23 @@ public class LiveChannelListPanel {
                                 @NonNull Handler handler,
                                 @NonNull LinearLayout rootView,
                                 @NonNull TvRecyclerView groupView,
-                                @NonNull TvRecyclerView channelView) {
+                                @NonNull TvRecyclerView channelView,
+                                @NonNull LinearLayout groupEpg,
+                                @NonNull LinearLayout divLeft,
+                                @NonNull LinearLayout divRight,
+                                @NonNull TvRecyclerView epgDate,
+                                @NonNull TvRecyclerView epgInfo) {
 
         this.contextRef = new WeakReference<>(context);
         this.handler = handler;
         this.rootViewRef = new WeakReference<>(rootView);
         this.groupViewRef = new WeakReference<>(groupView);
         this.channelViewRef = new WeakReference<>(channelView);
+        this.groupEpgRef = new WeakReference<>(groupEpg);
+        this.divLeftRef = new WeakReference<>(divLeft);
+        this.divRightRef = new WeakReference<>(divRight);
+        this.epgDateViewRef = new WeakReference<>(epgDate);
+        this.epgInfoViewRef = new WeakReference<>(epgInfo);
 
         rootView.setVisibility(View.INVISIBLE);
     }
@@ -90,6 +106,20 @@ public class LiveChannelListPanel {
     }
 
     // ==================== 公共方法 ====================
+
+    /**
+     * 从 Activity 强制同步高亮（用于显示面板前校正）
+     */
+    public void syncHighlightFromActivity(int groupIndex, int channelIndex) {
+        this.currentGroupIndex = groupIndex;
+        this.currentChannelIndex = channelIndex;
+        if (groupAdapter != null) {
+            groupAdapter.setSelectedGroupIndex(groupIndex);
+        }
+        if (channelAdapter != null) {
+            channelAdapter.setSelectedChannelIndex(channelIndex);
+        }
+    }
 
     public void refreshFull(List<LiveChannelGroup> groups, int groupIndex, int channelIndex) {
         this.currentGroupIndex = groupIndex;
@@ -127,7 +157,6 @@ public class LiveChannelListPanel {
     }
 
     public void loadGroup(int groupIndex, List<LiveChannelGroup> allGroups) {
-        // 如果当前是 EPG 模式，先切换回频道模式
         if (isEpgMode) {
             showChannelMode();
         }
@@ -158,29 +187,12 @@ public class LiveChannelListPanel {
             return;
         }
         isEpgMode = true;
+        setEpgViewsVisible(true);
+        setChannelViewsVisible(false);
 
-        if (!isShowing) {
-            LinearLayout rootView = rootViewRef.get();
-            if (rootView != null) {
-                rootView.setVisibility(View.VISIBLE);
-                rootView.setAlpha(0.0f);
-                rootView.setTranslationX(-rootView.getWidth() / 2f);
-                rootView.animate()
-                        .translationX(0)
-                        .alpha(1.0f)
-                        .setDuration(250)
-                        .setInterpolator(new DecelerateInterpolator())
-                        .setListener(null);
-                isShowing = true;
-            }
-            if (listener != null) listener.onEpgModeRequest();
-            handler.removeCallbacks(hideRunnable);
-            handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
-        } else {
-            if (listener != null) listener.onEpgModeRequest();
-            handler.removeCallbacks(hideRunnable);
-            handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
-        }
+        if (listener != null) listener.onEpgModeChanged(true);
+        handler.removeCallbacks(hideRunnable);
+        handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
     }
 
     public void showChannelMode() {
@@ -190,17 +202,21 @@ public class LiveChannelListPanel {
             return;
         }
         isEpgMode = false;
-        if (isShowing && listener != null) {
+        setEpgViewsVisible(false);
+        setChannelViewsVisible(true);
+
+        if (listener != null) {
+            listener.onEpgModeChanged(false);
             refreshFull(listener.getChannelGroups(), listener.getCurrentGroupIndex(), listener.getCurrentChannelIndex());
-            listener.onChannelModeRequest();
-            handler.removeCallbacks(hideRunnable);
-            handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
         }
+        handler.removeCallbacks(hideRunnable);
+        handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
     }
 
-    /**
-     * 显示面板 - 保留原有的 EPG 模式状态，不强制重置
-     */
+    public void onShiyiPlaybackStarted() {
+        if (listener != null) listener.onShiyiPlaybackStarted();
+    }
+
     public void show() {
         if (isShowing) {
             handler.removeCallbacks(hideRunnable);
@@ -208,15 +224,15 @@ public class LiveChannelListPanel {
             return;
         }
 
-        // 关键修复：根据隐藏前的模式恢复视图
+        // 显示前强制从 Activity 同步当前播放频道的高亮
+        if (listener != null) {
+            syncHighlightFromActivity(listener.getCurrentGroupIndex(), listener.getCurrentChannelIndex());
+        }
+
         if (isEpgMode) {
-            // 恢复 EPG 视图
-            if (listener != null) listener.onEpgModeRequest();
+            showEpgMode();
         } else {
-            // 恢复频道列表视图，刷新高亮
-            if (listener != null) {
-                refreshFull(listener.getChannelGroups(), listener.getCurrentGroupIndex(), listener.getCurrentChannelIndex());
-            }
+            showChannelMode();
         }
 
         handler.postDelayed(focusAndShowRunnable, 200);
@@ -236,6 +252,24 @@ public class LiveChannelListPanel {
     }
 
     // ==================== 私有方法 ====================
+
+    private void setEpgViewsVisible(boolean visible) {
+        LinearLayout groupEpg = groupEpgRef.get();
+        LinearLayout divLeft = divLeftRef.get();
+        TvRecyclerView epgInfo = epgInfoViewRef.get();
+
+        if (groupEpg != null) groupEpg.setVisibility(visible ? View.VISIBLE : View.GONE);
+        if (divLeft != null) divLeft.setVisibility(visible ? View.VISIBLE : View.GONE);
+        if (epgInfo != null) epgInfo.setVisibility(visible ? View.VISIBLE : View.GONE);
+    }
+
+    private void setChannelViewsVisible(boolean visible) {
+        LinearLayout divRight = divRightRef.get();
+        TvRecyclerView groupView = groupViewRef.get();
+
+        if (divRight != null) divRight.setVisibility(visible ? View.VISIBLE : View.GONE);
+        if (groupView != null) groupView.setVisibility(visible ? View.VISIBLE : View.GONE);
+    }
 
     private void scrollToCurrent(int groupIndex, int channelIndex) {
         TvRecyclerView gv = groupViewRef.get();
@@ -332,8 +366,6 @@ public class LiveChannelListPanel {
         listener.onChannelSelected(groupIndex, position);
     }
 
-    // ==================== 动画逻辑 ====================
-
     private void focusAndShowInternal() {
         TvRecyclerView groupView = groupViewRef.get();
         TvRecyclerView channelView = channelViewRef.get();
@@ -396,7 +428,6 @@ public class LiveChannelListPanel {
                     public void onAnimationEnd(Animator animation) {
                         rootView.setVisibility(View.INVISIBLE);
                         isShowing = false;
-                        // 关键：隐藏时不要重置 isEpgMode
                     }
                 });
 
