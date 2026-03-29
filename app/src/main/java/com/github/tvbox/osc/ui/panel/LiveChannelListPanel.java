@@ -25,9 +25,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 左侧频道列表面板 - 最终解耦版（修正编译错误）
- * 职责：管理左侧容器的显示/隐藏动画、频道列表的展示和用户交互
- * 通过回调通知 Activity 切换 EPG 模式，避免视图冲突
+ * 左侧频道列表面板 - 最终稳定版
+ * 修复：
+ * - 高亮始终跟随当前播放频道
+ * - 分组切换不改变播放状态
+ * - EPG 模式状态机完整
+ * - 添加 EPG 模式切换的平移动画
  */
 public class LiveChannelListPanel {
 
@@ -55,9 +58,8 @@ public class LiveChannelListPanel {
 
     private ChannelListListener listener;
     private boolean isShowing = false;
-    private boolean isEpgMode = false;   // 当前是否处于 EPG 模式
+    private boolean isEpgMode = false;
 
-    // 保存当前选中的分组和频道索引（由外部同步）
     private int currentGroupIndex = 0;
     private int currentChannelIndex = -1;
 
@@ -90,9 +92,6 @@ public class LiveChannelListPanel {
 
     // ==================== 公共方法 ====================
 
-    /**
-     * 完全刷新面板（数据源变化时调用）
-     */
     public void refreshFull(List<LiveChannelGroup> groups, int groupIndex, int channelIndex) {
         this.currentGroupIndex = groupIndex;
         this.currentChannelIndex = channelIndex;
@@ -116,9 +115,6 @@ public class LiveChannelListPanel {
         }
     }
 
-    /**
-     * 仅更新高亮和滚动（播放频道切换时调用）
-     */
     public void updateSelectionAndScroll(int groupIndex, int channelIndex) {
         this.currentGroupIndex = groupIndex;
         this.currentChannelIndex = channelIndex;
@@ -132,12 +128,9 @@ public class LiveChannelListPanel {
     }
 
     /**
-     * 切换到指定分组（密码验证成功后调用）
+     * 加载指定分组（仅刷新列表，不改变播放状态）
      */
     public void loadGroup(int groupIndex, List<LiveChannelGroup> allGroups) {
-        this.currentGroupIndex = groupIndex;
-        this.currentChannelIndex = -1;
-
         if (groupAdapter != null) {
             groupAdapter.setSelectedGroupIndex(groupIndex);
         }
@@ -153,37 +146,38 @@ public class LiveChannelListPanel {
         }
 
         if (isShowing && !isEpgMode) {
-            scrollToCurrent(groupIndex, -1);
+            // 滚动到播放位置，而不是刚加载的分组
+            scrollToCurrent(currentGroupIndex, currentChannelIndex);
         }
     }
 
-    /**
-     * 切换到 EPG 模式（由 Activity 调用）
-     */
     public void showEpgMode() {
         if (isEpgMode) return;
         isEpgMode = true;
-        if (listener != null) listener.onEpgModeRequest();
-        // 确保面板是显示状态
-        if (!isShowing) show();
-    }
 
-    /**
-     * 切换回频道模式（由 Activity 调用）
-     */
-    public void showChannelMode() {
-        if (!isEpgMode) return;
-        isEpgMode = false;
-        if (listener != null) listener.onChannelModeRequest();
-        // 如果面板在显示，刷新频道列表数据
-        if (isShowing && listener != null) {
-            refreshFull(listener.getChannelGroups(), listener.getCurrentGroupIndex(), listener.getCurrentChannelIndex());
+        if (listener != null) listener.onEpgModeRequest();
+
+        if (!isShowing) {
+            show(); // 先显示面板（会执行频道模式动画）
+        } else {
+            handler.removeCallbacks(hideRunnable);
+            handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
         }
     }
 
-    /**
-     * 显示面板（频道模式，由 Activity 在确定键时调用）
-     */
+    public void showChannelMode() {
+        if (!isEpgMode) return;
+        isEpgMode = false;
+
+        if (listener != null) listener.onChannelModeRequest();
+
+        if (isShowing && listener != null) {
+            refreshFull(listener.getChannelGroups(), listener.getCurrentGroupIndex(), listener.getCurrentChannelIndex());
+            handler.removeCallbacks(hideRunnable);
+            handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
+        }
+    }
+
     public void show() {
         if (isShowing) {
             handler.removeCallbacks(hideRunnable);
@@ -191,7 +185,6 @@ public class LiveChannelListPanel {
             return;
         }
 
-        // 显示前强制同步为当前播放频道
         if (listener != null) {
             refreshFull(listener.getChannelGroups(), listener.getCurrentGroupIndex(), listener.getCurrentChannelIndex());
         }
@@ -321,7 +314,6 @@ public class LiveChannelListPanel {
             return;
         }
 
-        // 等待滚动完成
         boolean isScrolling = groupView.isScrolling() ||
                 (channelView != null && channelView.isScrolling()) ||
                 groupView.isComputingLayout() ||
@@ -332,13 +324,11 @@ public class LiveChannelListPanel {
             return;
         }
 
-        // 使用保存的当前播放位置进行滚动和高亮（不再依赖 Adapter 方法）
         int currentGroup = currentGroupIndex;
         int currentChannel = currentChannelIndex;
         if (currentGroup < 0) currentGroup = 0;
         if (currentChannel < 0) currentChannel = 0;
 
-        // 滚动到当前分组和频道
         groupView.scrollToPosition(currentGroup);
         groupView.setSelection(currentGroup);
         if (channelView != null) {
@@ -346,10 +336,8 @@ public class LiveChannelListPanel {
             channelView.setSelection(currentChannel);
         }
 
-        // 请求焦点
         groupView.requestFocus();
 
-        // 显示动画
         rootView.setVisibility(View.VISIBLE);
         rootView.setAlpha(0.0f);
         rootView.setTranslationX(-rootView.getWidth() / 2f);
@@ -378,7 +366,7 @@ public class LiveChannelListPanel {
                     public void onAnimationEnd(Animator animation) {
                         rootView.setVisibility(View.INVISIBLE);
                         isShowing = false;
-                        // 注意：模式标志不重置，因为模式由外部控制
+                        isEpgMode = false;   // 重置模式
                     }
                 });
 
