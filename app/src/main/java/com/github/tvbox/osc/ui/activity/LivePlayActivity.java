@@ -500,8 +500,11 @@ public class LivePlayActivity extends BaseActivity {
                 // 如果当前是 EPG 模式，先切换回频道模式
                 if (channelListPanel != null && channelListPanel.isEpgMode()) {
                     channelListPanel.showChannelMode();
+                    // 延迟执行分组切换，确保视图切换完成
+                    mHandler.postDelayed(() -> handleGroupSelected(groupIndex), 100);
+                } else {
+                    handleGroupSelected(groupIndex);
                 }
-                handleGroupSelected(groupIndex);
             }
 
             @Override
@@ -750,19 +753,28 @@ public class LivePlayActivity extends BaseActivity {
             mHandler.post(mHideChannelInfoRun);
         } else if (settingsPanel != null && settingsPanel.isShowing()) {
             settingsPanel.hide();
-        } else if (channelListPanel != null && !channelListPanel.isShowing()) {
-            channelListPanel.updateSelectionAndScroll(currentChannelGroupIndex, currentLiveChannelIndex);
-            channelListPanel.show();
-            mHandler.post(tv_sys_timeRunnable);
-        } else if (channelListPanel != null && channelListPanel.isShowing()) {
-            channelListPanel.hide();
-            mHandler.removeCallbacks(tv_sys_timeRunnable);
+        } else if (channelListPanel != null) {
+            if (!channelListPanel.isShowing()) {
+                channelListPanel.updateSelectionAndScroll(currentChannelGroupIndex, currentLiveChannelIndex);
+                channelListPanel.show();
+                mHandler.post(tv_sys_timeRunnable);
+            } else {
+                // 面板已显示：根据模式决定行为
+                if (channelListPanel.isEpgMode()) {
+                    // EPG 模式：切换回频道模式（不隐藏面板）
+                    channelListPanel.showChannelMode();
+                } else {
+                    // 频道模式：隐藏面板
+                    channelListPanel.hide();
+                    mHandler.removeCallbacks(tv_sys_timeRunnable);
+                }
+            }
         }
     }
 
     public void divLoadEpgR(View view) {
         if (settingsPanel != null && settingsPanel.isShowing()) settingsPanel.hide();
-        // 关键修复：直接进入 EPG 模式，不再先隐藏面板
+        // 直接进入 EPG 模式，不再先隐藏面板
         if (channelListPanel != null) channelListPanel.showEpgMode();
     }
 
