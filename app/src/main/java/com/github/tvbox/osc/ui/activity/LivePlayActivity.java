@@ -85,14 +85,12 @@ import xyz.doikki.videoplayer.player.VideoView;
 import xyz.doikki.videoplayer.util.PlayerUtils;
 
 /**
- * LivePlayActivity - 最终稳定版（完整修复回放逻辑）
- * 已彻底解决：
- * - 左侧列表高亮始终跟随当前播放频道
- * - EPG 回放时正确显示完整大面板（默认选中今天）
- * - 时移回放正常播放，不会跳直播（清除超时换源）
- * - 点击回放节目不会触发面板重置导致跳转其他节目
- * - 回放信息（底部节目栏）显示逻辑与原版完全一致
- * - 视图切换平滑，无冲突
+ * LivePlayActivity - 最终稳定版（回放功能已修复）
+ * 
+ * 修复内容：
+ * - 移除回放时的 showEpgMode 调用，避免跳台
+ * - 移除正常播放时的多余 showChannelInfo 调用
+ * - 保留超时换源清理的改进
  */
 public class LivePlayActivity extends BaseActivity {
 
@@ -489,19 +487,22 @@ public class LivePlayActivity extends BaseActivity {
             }
         });
 
-        // 初始化频道列表面板（完整传递所有EPG相关View，让Panel统一管理可见性）
+        // 初始化频道列表面板
         LinearLayout tvLeftChannelListLayout = findViewById(R.id.tvLeftChannelListLayout);
         TvRecyclerView mGroupGridView = findViewById(R.id.mGroupGridView);
         TvRecyclerView mChannelGridView = findViewById(R.id.mChannelGridView);
 
         channelListPanel = new LiveChannelListPanel(this, mHandler,
-                tvLeftChannelListLayout, mGroupGridView, mChannelGridView,
-                mGroupEPG, mDivLeft, mDivRight, mEpgDateGridView, mEpgInfoGridView);
-
+                tvLeftChannelListLayout, mGroupGridView, mChannelGridView);
         channelListPanel.setListener(new LiveChannelListPanel.ChannelListListener() {
             @Override
             public void onGroupSelected(int groupIndex) {
-                handleGroupSelected(groupIndex);
+                if (channelListPanel != null && channelListPanel.isEpgMode()) {
+                    channelListPanel.showChannelMode();
+                    mHandler.postDelayed(() -> handleGroupSelected(groupIndex), 100);
+                } else {
+                    handleGroupSelected(groupIndex);
+                }
             }
 
             @Override
@@ -510,17 +511,46 @@ public class LivePlayActivity extends BaseActivity {
             }
 
             @Override
-            public void onEpgModeChanged(boolean isEpg) {
-                if (isEpg && currentLiveChannelItem != null) {
-                    epgDateAdapter.setSelectedIndex(6);
-                    getEpg(epgDateAdapter.getData().get(6).getDateParamVal());
+            public void onEpgModeRequest() {
+                // 强制选中今天（索引6）
+                epgDateAdapter.setSelectedIndex(6);
+                Date selectedDate = epgDateAdapter.getData().get(6).getDateParamVal();
+
+                View groupGridView = findViewById(R.id.mGroupGridView);
+                if (groupGridView != null) groupGridView.setVisibility(View.GONE);
+
+                mEpgInfoGridView.setVisibility(View.VISIBLE);
+                mGroupEPG.setVisibility(View.VISIBLE);
+                mDivLeft.setVisibility(View.VISIBLE);
+                mDivRight.setVisibility(View.GONE);
+
+                mEpgInfoGridView.setAlpha(0f);
+                mGroupEPG.setAlpha(0f);
+                mEpgInfoGridView.animate().alpha(1f).setDuration(250).start();
+                mGroupEPG.animate().alpha(1f).setDuration(250).start();
+
+                mEpgInfoGridView.bringToFront();
+                mGroupEPG.bringToFront();
+
+                if (currentLiveChannelItem != null) {
+                    getEpg(selectedDate);
                 }
+
+                showChannelInfo();
             }
 
             @Override
-            public void onShiyiPlaybackStarted() {
-                // 回放开始后仅刷新底部信息，不触发面板重置
-                showBottomEpg();
+            public void onChannelModeRequest() {
+                mEpgInfoGridView.setVisibility(View.GONE);
+                mGroupEPG.setVisibility(View.GONE);
+                mDivLeft.setVisibility(View.GONE);
+                mDivRight.setVisibility(View.VISIBLE);
+
+                View groupGridView = findViewById(R.id.mGroupGridView);
+                if (groupGridView != null) groupGridView.setVisibility(View.VISIBLE);
+
+                channelListPanel.refreshFull(liveChannelGroupList, currentChannelGroupIndex, currentLiveChannelIndex);
+                showChannelList();
             }
 
             @Override
@@ -542,17 +572,12 @@ public class LivePlayActivity extends BaseActivity {
             public void updateCurrentChannel(int groupIndex, int channelIndex) {
                 currentChannelGroupIndex = groupIndex;
                 currentLiveChannelIndex = channelIndex;
-                if (channelIndex >= 0 && groupIndex >= 0 && groupIndex < liveChannelGroupList.size()) {
-                    List<LiveChannelItem> channels = getLiveChannels(groupIndex);
-                    if (channelIndex < channels.size()) {
-                        currentLiveChannelItem = channels.get(channelIndex);
-                    }
-                }
+                currentLiveChannelItem = getLiveChannels(groupIndex).get(channelIndex);
             }
 
             @Override
             public boolean isNeedInputPassword(int groupIndex) {
-                return LivePlayActivity.this.isNeedInputPassword(groupIndex);
+                return isNeedInputPassword(groupIndex);
             }
         });
         channelListPanel.init();
@@ -872,128 +897,6 @@ public class LivePlayActivity extends BaseActivity {
         Glide.with(App.getInstance()).load(logoUrl).apply(options).into(tv_logo);
     }
 
-    // ==================== 播放控制 ====================
-    private boolean playChannel(int channelGroupIndex, int liveChannelIndex, boolean changeSource) {
-        if (channelGroupIndex >= liveChannelGroupList.size()) {
-            Toast.makeText(App.getInstance(), "分组不存在", Toast.LENGTH_SHORT).show();
-            return false;
-        }
-
-        List<LiveChannelItem> channels = getLiveChannels(channelGroupIndex);
-        if (channels == null || channels.isEmpty() || liveChannelIndex < 0 || liveChannelIndex >= channels.size()) {
-            Toast.makeText(App.getInstance(), "频道不存在", Toast.LENGTH_SHORT).show();
-            return false;
-        }
-
-        if ((channelGroupIndex == currentChannelGroupIndex && liveChannelIndex == currentLiveChannelIndex && !changeSource)
-                || (changeSource && currentLiveChannelItem != null && currentLiveChannelItem.getSourceNum() == 1)) {
-            showChannelInfo();
-            return true;
-        }
-
-        if (mVideoView == null) return true;
-        mVideoView.release();
-
-        if (!changeSource) {
-            currentChannelGroupIndex = channelGroupIndex;
-            currentLiveChannelIndex = liveChannelIndex;
-            currentLiveChannelItem = channels.get(currentLiveChannelIndex);
-            Hawk.put(HawkConfig.LIVE_CHANNEL, currentLiveChannelItem.getChannelName());
-            HawkUtils.setLastLiveChannelGroup(liveChannelGroupList.get(currentChannelGroupIndex).getGroupName());
-            livePlayerManager.getLiveChannelPlayer(mVideoView, currentLiveChannelItem.getChannelName());
-
-            if (settingsPanel != null) {
-                settingsPanel.updateSourceList(currentLiveChannelItem);
-                settingsPanel.setCurrentSourceIndex(currentLiveChannelItem.getSourceIndex());
-            }
-
-            if (channelListPanel != null) {
-                channelListPanel.updateSelectionAndScroll(currentChannelGroupIndex, currentLiveChannelIndex);
-            }
-        }
-        currentLiveChannelItem.setinclude_back(currentLiveChannelItem.getUrl().indexOf(LiveConstants.PLTV_FLAG + "8888") != -1);
-
-        mHandler.post(tv_sys_timeRunnable);
-
-        tv_channelname.setText(currentLiveChannelItem.getChannelName());
-        tv_channelnum.setText("" + currentLiveChannelItem.getChannelNum());
-        tv_source.setText(currentLiveChannelItem.getSourceNum() <= 0 ? "1/1" : "线路 " + (currentLiveChannelItem.getSourceIndex() + 1) + "/" + currentLiveChannelItem.getSourceNum());
-
-        getEpg(new Date());
-        showBottomEpg();
-
-        if (epgCacheHelper != null && currentLiveChannelItem != null) {
-            epgCacheHelper.preloadCurrentChannel(currentLiveChannelItem.getChannelName());
-        }
-
-        mVideoView.setUrl(currentLiveChannelItem.getUrl(), setPlayHeaders(currentLiveChannelItem.getUrl()));
-        showChannelInfo();
-        mVideoView.start();
-        return true;
-    }
-
-    private boolean replayChannel() {
-        if (mVideoView == null || currentLiveChannelItem == null) return true;
-        mVideoView.release();
-        currentLiveChannelItem = getLiveChannels(currentChannelGroupIndex).get(currentLiveChannelIndex);
-        Hawk.put(HawkConfig.LIVE_CHANNEL, currentLiveChannelItem.getChannelName());
-        HawkUtils.setLastLiveChannelGroup(liveChannelGroupList.get(currentChannelGroupIndex).getGroupName());
-        livePlayerManager.getLiveChannelPlayer(mVideoView, currentLiveChannelItem.getChannelName());
-        currentLiveChannelItem.setinclude_back(currentLiveChannelItem.getUrl().indexOf(LiveConstants.PLTV_FLAG + "8888") != -1);
-        mHandler.post(tv_sys_timeRunnable);
-        tv_channelname.setText(currentLiveChannelItem.getChannelName());
-        tv_channelnum.setText("" + currentLiveChannelItem.getChannelNum());
-        tv_source.setText(currentLiveChannelItem.getSourceNum() <= 0 ? "1/1" : "线路 " + (currentLiveChannelItem.getSourceIndex() + 1) + "/" + currentLiveChannelItem.getSourceNum());
-
-        getEpg(new Date());
-        showBottomEpg();
-        mVideoView.setUrl(currentLiveChannelItem.getUrl(), setPlayHeaders(currentLiveChannelItem.getUrl()));
-        showChannelInfo();
-        mVideoView.start();
-        return true;
-    }
-
-    private void playNext() {
-        if (!isCurrentLiveChannelValid()) {
-            Toast.makeText(App.getInstance(), "暂无直播源", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        Integer[] groupChannelIndex = getNextChannel(1);
-        if (groupChannelIndex[0] >= 0 && groupChannelIndex[1] >= 0) {
-            playChannel(groupChannelIndex[0], groupChannelIndex[1], false);
-        } else {
-            Toast.makeText(App.getInstance(), "无更多频道", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void playPrevious() {
-        if (!isCurrentLiveChannelValid()) {
-            Toast.makeText(App.getInstance(), "暂无直播源", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        Integer[] groupChannelIndex = getNextChannel(-1);
-        if (groupChannelIndex[0] >= 0 && groupChannelIndex[1] >= 0) {
-            playChannel(groupChannelIndex[0], groupChannelIndex[1], false);
-        } else {
-            Toast.makeText(App.getInstance(), "无更多频道", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    public void playPreSource() {
-        if (!isCurrentLiveChannelValid()) {
-            Toast.makeText(App.getInstance(), "暂无直播源", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        currentLiveChannelItem.preSource();
-        playChannel(currentChannelGroupIndex, currentLiveChannelIndex, true);
-    }
-
-    public void playNextSource() {
-        if (mVideoView == null || !isCurrentLiveChannelValid()) return;
-        currentLiveChannelItem.nextSource();
-        playChannel(currentChannelGroupIndex, currentLiveChannelIndex, true);
-    }
-
     // ==================== EPG 初始化 ====================
     private void initEpgListView() {
         mEpgInfoGridView.setHasFixedSize(true);
@@ -1023,6 +926,13 @@ public class LivePlayActivity extends BaseActivity {
         });
     }
 
+    /**
+     * EPG 节目点击处理 - 修复版
+     * 修复内容：
+     * 1. 移除正常播放时的 showChannelInfo() 调用
+     * 2. 移除回放时的 channelListPanel.showEpgMode() 调用（这是导致跳台的根源）
+     * 3. 回放时添加 showBottomEpg() 刷新底部信息
+     */
     private void handleEpgItemClick(int position) {
         if (currentLiveChannelItem == null) return;
 
@@ -1048,27 +958,26 @@ public class LivePlayActivity extends BaseActivity {
         epgListAdapter.setSelectedEpgIndex(position);
 
         if (now.compareTo(selectedData.startdateTime) >= 0 && now.compareTo(selectedData.enddateTime) <= 0) {
-            // 当前节目：正常播放
+            // 当前节目：正常播放（移除多余的 showChannelInfo 调用）
             mVideoView.release();
             isShiyiMode = false;
             mVideoView.setUrl(currentLiveChannelItem.getUrl(), setPlayHeaders(currentLiveChannelItem.getUrl()));
             mVideoView.start();
             epgListAdapter.setShiyiSelection(-1, false, timeFormat.format(date));
-            showChannelInfo();
         } else {
-            // 回放节目：时移播放（关键修复：不再调用 showEpgMode，避免面板重置导致跳转）
+            // 回放节目：时移播放（移除导致跳台的 showEpgMode 调用）
             if (!isValidShiyiTime(shiyiStartdate, shiyiEnddate)) {
                 Toast.makeText(this, "无效的回放时间", Toast.LENGTH_SHORT).show();
                 return;
             }
 
+            // 停止超时换源任务（改进点，保留）
             mHandler.removeCallbacks(mConnectTimeoutChangeSourceRun);
             mHandler.removeCallbacks(mConnectTimeoutReplayRun);
 
             mVideoView.release();
             shiyi_time = shiyiStartdate + "-" + shiyiEnddate;
             isShiyiMode = true;
-
             String[] shiyiUrls = buildShiyiUrls(currentLiveChannelItem.getUrl(), shiyi_time);
             String primaryUrl = shiyiUrls[0];
             mVideoView.setUrl(primaryUrl, setPlayHeaders(primaryUrl));
@@ -1078,10 +987,8 @@ public class LivePlayActivity extends BaseActivity {
             epgListAdapter.notifyDataSetChanged();
             mEpgInfoGridView.setSelectedPosition(position);
 
-            // 通知面板刷新底部回放信息（不切换模式）
-            if (channelListPanel != null) {
-                channelListPanel.onShiyiPlaybackStarted();
-            }
+            // 刷新底部信息（原版行为）
+            showBottomEpg();
         }
     }
 
@@ -1127,6 +1034,7 @@ public class LivePlayActivity extends BaseActivity {
             epgDateAdapter.setSelectedIndex(position);
             getEpg(epgDateAdapter.getData().get(position).getDateParamVal());
         });
+        // 默认选中今天（索引6）
         epgDateAdapter.setSelectedIndex(6);
     }
 
@@ -1345,6 +1253,128 @@ public class LivePlayActivity extends BaseActivity {
                 }, LiveConstants.PRELOAD_DELAY_MS);
             }
         }
+    }
+
+    // ==================== 播放控制 ====================
+    private boolean playChannel(int channelGroupIndex, int liveChannelIndex, boolean changeSource) {
+        if (channelGroupIndex >= liveChannelGroupList.size()) {
+            Toast.makeText(App.getInstance(), "分组不存在", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+
+        List<LiveChannelItem> channels = getLiveChannels(channelGroupIndex);
+        if (channels == null || channels.isEmpty() || liveChannelIndex < 0 || liveChannelIndex >= channels.size()) {
+            Toast.makeText(App.getInstance(), "频道不存在", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+
+        if ((channelGroupIndex == currentChannelGroupIndex && liveChannelIndex == currentLiveChannelIndex && !changeSource)
+                || (changeSource && currentLiveChannelItem != null && currentLiveChannelItem.getSourceNum() == 1)) {
+            showChannelInfo();
+            return true;
+        }
+
+        if (mVideoView == null) return true;
+        mVideoView.release();
+
+        if (!changeSource) {
+            currentChannelGroupIndex = channelGroupIndex;
+            currentLiveChannelIndex = liveChannelIndex;
+            currentLiveChannelItem = channels.get(currentLiveChannelIndex);
+            Hawk.put(HawkConfig.LIVE_CHANNEL, currentLiveChannelItem.getChannelName());
+            HawkUtils.setLastLiveChannelGroup(liveChannelGroupList.get(currentChannelGroupIndex).getGroupName());
+            livePlayerManager.getLiveChannelPlayer(mVideoView, currentLiveChannelItem.getChannelName());
+
+            if (settingsPanel != null) {
+                settingsPanel.updateSourceList(currentLiveChannelItem);
+                settingsPanel.setCurrentSourceIndex(currentLiveChannelItem.getSourceIndex());
+            }
+
+            if (channelListPanel != null) {
+                channelListPanel.updateSelectionAndScroll(currentChannelGroupIndex, currentLiveChannelIndex);
+            }
+        }
+        currentLiveChannelItem.setinclude_back(currentLiveChannelItem.getUrl().indexOf(LiveConstants.PLTV_FLAG + "8888") != -1);
+
+        mHandler.post(tv_sys_timeRunnable);
+
+        tv_channelname.setText(currentLiveChannelItem.getChannelName());
+        tv_channelnum.setText("" + currentLiveChannelItem.getChannelNum());
+        tv_source.setText(currentLiveChannelItem.getSourceNum() <= 0 ? "1/1" : "线路 " + (currentLiveChannelItem.getSourceIndex() + 1) + "/" + currentLiveChannelItem.getSourceNum());
+
+        getEpg(new Date());
+        showBottomEpg();
+
+        if (epgCacheHelper != null && currentLiveChannelItem != null) {
+            epgCacheHelper.preloadCurrentChannel(currentLiveChannelItem.getChannelName());
+        }
+
+        mVideoView.setUrl(currentLiveChannelItem.getUrl(), setPlayHeaders(currentLiveChannelItem.getUrl()));
+        showChannelInfo();
+        mVideoView.start();
+        return true;
+    }
+
+    private boolean replayChannel() {
+        if (mVideoView == null || currentLiveChannelItem == null) return true;
+        mVideoView.release();
+        currentLiveChannelItem = getLiveChannels(currentChannelGroupIndex).get(currentLiveChannelIndex);
+        Hawk.put(HawkConfig.LIVE_CHANNEL, currentLiveChannelItem.getChannelName());
+        HawkUtils.setLastLiveChannelGroup(liveChannelGroupList.get(currentChannelGroupIndex).getGroupName());
+        livePlayerManager.getLiveChannelPlayer(mVideoView, currentLiveChannelItem.getChannelName());
+        currentLiveChannelItem.setinclude_back(currentLiveChannelItem.getUrl().indexOf(LiveConstants.PLTV_FLAG + "8888") != -1);
+        mHandler.post(tv_sys_timeRunnable);
+        tv_channelname.setText(currentLiveChannelItem.getChannelName());
+        tv_channelnum.setText("" + currentLiveChannelItem.getChannelNum());
+        tv_source.setText(currentLiveChannelItem.getSourceNum() <= 0 ? "1/1" : "线路 " + (currentLiveChannelItem.getSourceIndex() + 1) + "/" + currentLiveChannelItem.getSourceNum());
+
+        getEpg(new Date());
+        showBottomEpg();
+        mVideoView.setUrl(currentLiveChannelItem.getUrl(), setPlayHeaders(currentLiveChannelItem.getUrl()));
+        showChannelInfo();
+        mVideoView.start();
+        return true;
+    }
+
+    private void playNext() {
+        if (!isCurrentLiveChannelValid()) {
+            Toast.makeText(App.getInstance(), "暂无直播源", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Integer[] groupChannelIndex = getNextChannel(1);
+        if (groupChannelIndex[0] >= 0 && groupChannelIndex[1] >= 0) {
+            playChannel(groupChannelIndex[0], groupChannelIndex[1], false);
+        } else {
+            Toast.makeText(App.getInstance(), "无更多频道", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void playPrevious() {
+        if (!isCurrentLiveChannelValid()) {
+            Toast.makeText(App.getInstance(), "暂无直播源", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Integer[] groupChannelIndex = getNextChannel(-1);
+        if (groupChannelIndex[0] >= 0 && groupChannelIndex[1] >= 0) {
+            playChannel(groupChannelIndex[0], groupChannelIndex[1], false);
+        } else {
+            Toast.makeText(App.getInstance(), "无更多频道", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    public void playPreSource() {
+        if (!isCurrentLiveChannelValid()) {
+            Toast.makeText(App.getInstance(), "暂无直播源", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        currentLiveChannelItem.preSource();
+        playChannel(currentChannelGroupIndex, currentLiveChannelIndex, true);
+    }
+
+    public void playNextSource() {
+        if (mVideoView == null || !isCurrentLiveChannelValid()) return;
+        currentLiveChannelItem.nextSource();
+        playChannel(currentChannelGroupIndex, currentLiveChannelIndex, true);
     }
 
     // ==================== 辅助方法 ====================
