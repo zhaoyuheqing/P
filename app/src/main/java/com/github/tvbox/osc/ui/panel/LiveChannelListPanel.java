@@ -25,7 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 左侧频道列表面板 - 最终解耦版
+ * 左侧频道列表面板 - 最终解耦版（修正编译错误）
  * 职责：管理左侧容器的显示/隐藏动画、频道列表的展示和用户交互
  * 通过回调通知 Activity 切换 EPG 模式，避免视图冲突
  */
@@ -56,6 +56,10 @@ public class LiveChannelListPanel {
     private ChannelListListener listener;
     private boolean isShowing = false;
     private boolean isEpgMode = false;   // 当前是否处于 EPG 模式
+
+    // 保存当前选中的分组和频道索引（由外部同步）
+    private int currentGroupIndex = 0;
+    private int currentChannelIndex = -1;
 
     private final Runnable hideRunnable = this::hideInternal;
     private final Runnable focusAndShowRunnable = this::focusAndShowInternal;
@@ -89,23 +93,26 @@ public class LiveChannelListPanel {
     /**
      * 完全刷新面板（数据源变化时调用）
      */
-    public void refreshFull(List<LiveChannelGroup> groups, int currentGroupIndex, int currentChannelIndex) {
+    public void refreshFull(List<LiveChannelGroup> groups, int groupIndex, int channelIndex) {
+        this.currentGroupIndex = groupIndex;
+        this.currentChannelIndex = channelIndex;
+
         if (groupAdapter != null) {
             groupAdapter.setNewData(groups);
-            groupAdapter.setSelectedGroupIndex(currentGroupIndex);
+            groupAdapter.setSelectedGroupIndex(groupIndex);
         }
 
         List<LiveChannelItem> channels = null;
-        if (currentGroupIndex >= 0 && groups != null && currentGroupIndex < groups.size()) {
-            channels = groups.get(currentGroupIndex).getLiveChannels();
+        if (groupIndex >= 0 && groups != null && groupIndex < groups.size()) {
+            channels = groups.get(groupIndex).getLiveChannels();
         }
         if (channelAdapter != null) {
             channelAdapter.setNewData(channels != null ? channels : new ArrayList<>());
-            channelAdapter.setSelectedChannelIndex(currentChannelIndex);
+            channelAdapter.setSelectedChannelIndex(channelIndex);
         }
 
         if (isShowing && !isEpgMode) {
-            scrollToCurrent(currentGroupIndex, currentChannelIndex);
+            scrollToCurrent(groupIndex, channelIndex);
         }
     }
 
@@ -113,6 +120,9 @@ public class LiveChannelListPanel {
      * 仅更新高亮和滚动（播放频道切换时调用）
      */
     public void updateSelectionAndScroll(int groupIndex, int channelIndex) {
+        this.currentGroupIndex = groupIndex;
+        this.currentChannelIndex = channelIndex;
+
         if (groupAdapter != null) groupAdapter.setSelectedGroupIndex(groupIndex);
         if (channelAdapter != null) channelAdapter.setSelectedChannelIndex(channelIndex);
 
@@ -125,6 +135,9 @@ public class LiveChannelListPanel {
      * 切换到指定分组（密码验证成功后调用）
      */
     public void loadGroup(int groupIndex, List<LiveChannelGroup> allGroups) {
+        this.currentGroupIndex = groupIndex;
+        this.currentChannelIndex = -1;
+
         if (groupAdapter != null) {
             groupAdapter.setSelectedGroupIndex(groupIndex);
         }
@@ -319,9 +332,9 @@ public class LiveChannelListPanel {
             return;
         }
 
-        // 获取当前播放位置（从 Adapter 中获取）
-        int currentGroup = groupAdapter.getSelectedGroupIndex();
-        int currentChannel = channelAdapter.getSelectedChannelIndex();
+        // 使用保存的当前播放位置进行滚动和高亮（不再依赖 Adapter 方法）
+        int currentGroup = currentGroupIndex;
+        int currentChannel = currentChannelIndex;
         if (currentGroup < 0) currentGroup = 0;
         if (currentChannel < 0) currentChannel = 0;
 
