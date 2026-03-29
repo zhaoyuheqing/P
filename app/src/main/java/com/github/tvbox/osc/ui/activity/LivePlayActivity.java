@@ -85,8 +85,8 @@ import xyz.doikki.videoplayer.player.VideoView;
 import xyz.doikki.videoplayer.util.PlayerUtils;
 
 /**
- * LivePlayActivity - 最终完整版
- * 已修复：回放节目时自动显示 EPG 大面板、左侧列表高亮跟随、设置面板切换正常
+ * LivePlayActivity - 最终修正版
+ * 已修复：回放节目时自动显示 EPG 大面板、左侧列表高亮跟随、设置面板切换正常、编译错误修复
  */
 public class LivePlayActivity extends BaseActivity {
 
@@ -685,9 +685,6 @@ public class LivePlayActivity extends BaseActivity {
         }
     }
 
-    /**
-     * 切换到 EPG 大面板（回放模式）
-     */
     public void divLoadEpgR(View view) {
         if (settingsPanel != null && settingsPanel.isShowing()) settingsPanel.hide();
         if (channelListPanel != null && channelListPanel.isShowing()) channelListPanel.hide();
@@ -1033,10 +1030,7 @@ public class LivePlayActivity extends BaseActivity {
             }
         });
 
-        epgListAdapter.setOnItemClickListener((adapter, view, position) -> {
-            // 复用上面的 OnItemListener 逻辑
-            mEpgInfoGridView.getOnItemListener().onItemClick(mEpgInfoGridView, view, position);
-        });
+        // 删除之前重复的 setOnItemClickListener，避免调用不存在的 getOnItemListener
     }
 
     private void initEpgDateView() {
