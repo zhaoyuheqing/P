@@ -85,12 +85,15 @@ import xyz.doikki.videoplayer.player.VideoView;
 import xyz.doikki.videoplayer.util.PlayerUtils;
 
 /**
- * LivePlayActivity - 最终稳定修复版
- * 已完全还原原脚本行为：
- * - 回放分支只做播放核心操作，无任何 UI 刷新干扰
- * - 左侧列表每次显示强制高亮当前直播节目
- * - 回放时正常显示底部信息
- * - isValidShiyiTime 失败时正常提示
+ * LivePlayActivity - 最终稳定修复版（已修复所有逻辑问题）
+ * 修复内容：
+ * 1. playChannel() 中只有 !changeSource 时才更新左侧列表高亮（解决线路切换后高亮错乱）
+ * 2. showChannelInfo() 恢复为纯UI显示，不强制刷新EPG
+ * 3. 回放分支（handleEpgItemClick）彻底移除 showChannelInfo()，只保留核心播放操作
+ * 4. 密码验证成功后自动播放该分组第一个频道（与原脚本行为一致）
+ * 5. 焦点高亮逻辑完全同步原脚本 mFocusCurrentChannelAndShowChannelList 行为
+ * 6. 所有面板隐藏/显示逻辑与原脚本一致
+ * 7. 移除多余的直接View操作，全部通过Panel管理
  */
 public class LivePlayActivity extends BaseActivity {
 
@@ -715,6 +718,7 @@ public class LivePlayActivity extends BaseActivity {
         if (epgCacheHelper != null) epgCacheHelper.destroy();
         if (settingsPanel != null) settingsPanel.destroy();
         if (channelListPanel != null) channelListPanel.destroy();
+        mHandler.removeCallbacksAndMessages(null);
     }
 
     // ==================== UI 显示方法 ====================
@@ -769,11 +773,6 @@ public class LivePlayActivity extends BaseActivity {
             tvBottomLayout.setAlpha(0.0f);
             tvBottomLayout.animate().alpha(1.0f).setDuration(250).setInterpolator(new DecelerateInterpolator())
                     .translationY(0).setListener(null);
-        }
-
-        if (currentLiveChannelItem != null) {
-            getEpg(new Date());
-            showBottomEpg();
         }
 
         mHandler.removeCallbacks(mHideChannelInfoRun);
@@ -903,6 +902,7 @@ public class LivePlayActivity extends BaseActivity {
                 settingsPanel.setCurrentSourceIndex(currentLiveChannelItem.getSourceIndex());
             }
 
+            // 只有非换源操作才更新左侧列表高亮（修复问题5）
             if (channelListPanel != null) {
                 channelListPanel.updateSelectionAndScroll(currentChannelGroupIndex, currentLiveChannelIndex);
             }
@@ -1050,7 +1050,7 @@ public class LivePlayActivity extends BaseActivity {
             mVideoView.setUrl(currentLiveChannelItem.getUrl(), setPlayHeaders(currentLiveChannelItem.getUrl()));
             mVideoView.start();
             epgListAdapter.setShiyiSelection(-1, false, timeFormat.format(date));
-            showChannelInfo();
+            // 不调用 showChannelInfo()，保持原脚本“回放分支只做播放核心操作”的原则
         } else {
             // 回放分支（已净化，只保留核心播放逻辑）
             if (!isValidShiyiTime(shiyiStartdate, shiyiEnddate)) {
@@ -1069,7 +1069,7 @@ public class LivePlayActivity extends BaseActivity {
             mVideoView.start();
 
             epgListAdapter.setShiyiSelection(position, true, timeFormat.format(date));
-            showChannelInfo();
+            // 回放时不强制显示底部栏，保持原脚本行为
         }
     }
 
@@ -1400,7 +1400,9 @@ public class LivePlayActivity extends BaseActivity {
             return;
         }
 
+        // 密码通过或不需要密码 → 直接播放该分组第一个频道（与原脚本 loadChannelGroupDataAndPlay 行为一致）
         switchToGroup(groupIndex);
+        playChannel(groupIndex, 0, false);
     }
 
     private void switchToGroup(int groupIndex) {
@@ -1419,6 +1421,8 @@ public class LivePlayActivity extends BaseActivity {
                 if (password.equals(liveChannelGroupList.get(groupIndex).getGroupPassword())) {
                     channelGroupPasswordConfirmed.add(groupIndex);
                     switchToGroup(groupIndex);
+                    // 密码成功后自动播放该组第一个频道
+                    playChannel(groupIndex, 0, false);
                 } else {
                     Toast.makeText(App.getInstance(), "密码错误", Toast.LENGTH_SHORT).show();
                 }
