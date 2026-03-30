@@ -9,6 +9,7 @@ import android.view.animation.DecelerateInterpolator;
 import android.widget.LinearLayout;
 
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.RecyclerView;   // ← 关键修复：使用 androidx
 
 import com.owen.tvrecyclerview.widget.TvRecyclerView;
 import com.owen.tvrecyclerview.widget.V7LinearLayoutManager;
@@ -25,11 +26,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 左侧频道列表面板 - 最终完整版（已结合全部聊天记录 + 用户评价修复焦点）
+ * 左侧频道列表面板 - 最终完整版（已结合全部聊天记录 + 用户评价 + 编译错误修复）
  * 关键修复：
- * - focusCurrentChannelRunnable 完全还原原脚本 mFocusCurrentChannelAndShowChannelList 行为（滚动停止检查 + requestFocus）
+ * - focusCurrentChannelRunnable 完全还原原脚本 mFocusCurrentChannelAndShowChannelList 行为
+ * - RecyclerView.ViewHolder 使用 androidx 正确 import
  * - show() 每次都强制同步高亮 + 执行延迟焦点
- * - 隐藏/显示动画与原脚本一致
  */
 public class LiveChannelListPanel {
 
