@@ -85,11 +85,12 @@ import xyz.doikki.videoplayer.player.VideoView;
 import xyz.doikki.videoplayer.util.PlayerUtils;
 
 /**
- * LivePlayActivity - 最终修复版
- * 修复：
- * - 回放时不再触发任何 EPG 列表刷新或面板模式切换
- * - 左侧列表每次显示时强制同步当前播放频道高亮
- * - 保留超时换源清理的改进
+ * LivePlayActivity - 最终稳定修复版
+ * 已完全还原原脚本行为：
+ * - 回放分支只做播放核心操作，无任何 UI 刷新干扰
+ * - 左侧列表每次显示强制高亮当前直播节目
+ * - 回放时正常显示底部信息
+ * - isValidShiyiTime 失败时正常提示
  */
 public class LivePlayActivity extends BaseActivity {
 
@@ -516,8 +517,7 @@ public class LivePlayActivity extends BaseActivity {
 
             @Override
             public void onShiyiPlaybackStarted() {
-                // 回放开始后只刷新底部信息，但必须避免刷新 EPG 列表
-                updateBottomEpgForShiyi();
+                showBottomEpg();
             }
 
             @Override
@@ -589,45 +589,6 @@ public class LivePlayActivity extends BaseActivity {
         mEpgInfoGridView.setVisibility(View.GONE);
         mGroupEPG.setVisibility(View.GONE);
         mHandler.postDelayed(mUpdateLayout, 500);
-    }
-
-    /**
-     * 仅更新底部 EPG 信息，不刷新整个 EPG 列表（用于回放模式）
-     */
-    private void updateBottomEpgForShiyi() {
-        if (isShiyiMode) return;
-        if (currentLiveChannelItem == null || currentLiveChannelItem.getChannelName() == null) {
-            tv_curr_name.setText(LiveConstants.NO_PROGRAM);
-            tv_next_name.setText("");
-            return;
-        }
-
-        String channelName = currentLiveChannelItem.getChannelName();
-        if (epgdata != null && !epgdata.isEmpty()) {
-            String[] epgInfo = EpgUtil.getEpgInfo(channelName);
-            getTvLogo(channelName, epgInfo == null ? null : epgInfo[0]);
-
-            Date now = new Date();
-            for (int size = epgdata.size() - 1; size >= 0; size--) {
-                Epginfo epg = epgdata.get(size);
-                if (now.after(epg.startdateTime) && now.before(epg.enddateTime)) {
-                    tv_curr_time.setText(epg.start + " - " + epg.end);
-                    tv_curr_name.setText(epg.title);
-                    if (size != epgdata.size() - 1) {
-                        Epginfo next = epgdata.get(size + 1);
-                        tv_next_time.setText(next.start + " - " + next.end);
-                        tv_next_name.setText(next.title);
-                    } else {
-                        tv_next_time.setText(LiveConstants.DEFAULT_START_TIME + " - " + LiveConstants.DEFAULT_END_TIME);
-                        tv_next_name.setText(LiveConstants.NO_INFO);
-                    }
-                    break;
-                }
-            }
-        } else {
-            tv_curr_name.setText(LiveConstants.NO_PROGRAM);
-            tv_next_name.setText("");
-        }
     }
 
     @Override
@@ -766,7 +727,6 @@ public class LivePlayActivity extends BaseActivity {
             settingsPanel.hide();
         } else if (channelListPanel != null) {
             if (!channelListPanel.isShowing()) {
-                // 显示前强制同步高亮
                 channelListPanel.syncHighlightFromActivity(currentChannelGroupIndex, currentLiveChannelIndex);
                 channelListPanel.show();
                 mHandler.post(tv_sys_timeRunnable);
@@ -862,7 +822,6 @@ public class LivePlayActivity extends BaseActivity {
     }
 
     private void showBottomEpg() {
-        if (isShiyiMode) return;
         if (currentLiveChannelItem == null || currentLiveChannelItem.getChannelName() == null) {
             tv_curr_name.setText(LiveConstants.NO_PROGRAM);
             tv_next_name.setText("");
@@ -1085,7 +1044,7 @@ public class LivePlayActivity extends BaseActivity {
         epgListAdapter.setSelectedEpgIndex(position);
 
         if (now.compareTo(selectedData.startdateTime) >= 0 && now.compareTo(selectedData.enddateTime) <= 0) {
-            // 当前节目：正常播放
+            // 当前直播
             mVideoView.release();
             isShiyiMode = false;
             mVideoView.setUrl(currentLiveChannelItem.getUrl(), setPlayHeaders(currentLiveChannelItem.getUrl()));
@@ -1093,14 +1052,11 @@ public class LivePlayActivity extends BaseActivity {
             epgListAdapter.setShiyiSelection(-1, false, timeFormat.format(date));
             showChannelInfo();
         } else {
-            // 回放节目：时移播放（关键：不调用任何面板模式切换或列表刷新）
+            // 回放分支（已净化，只保留核心播放逻辑）
             if (!isValidShiyiTime(shiyiStartdate, shiyiEnddate)) {
                 Toast.makeText(this, "无效的回放时间", Toast.LENGTH_SHORT).show();
                 return;
             }
-
-            mHandler.removeCallbacks(mConnectTimeoutChangeSourceRun);
-            mHandler.removeCallbacks(mConnectTimeoutReplayRun);
 
             mVideoView.release();
             shiyi_time = shiyiStartdate + "-" + shiyiEnddate;
@@ -1108,17 +1064,12 @@ public class LivePlayActivity extends BaseActivity {
 
             String[] shiyiUrls = buildShiyiUrls(currentLiveChannelItem.getUrl(), shiyi_time);
             String primaryUrl = shiyiUrls[0];
+
             mVideoView.setUrl(primaryUrl, setPlayHeaders(primaryUrl));
             mVideoView.start();
 
             epgListAdapter.setShiyiSelection(position, true, timeFormat.format(date));
-            epgListAdapter.notifyDataSetChanged();
-            mEpgInfoGridView.setSelectedPosition(position);
-
-            // 通知面板刷新底部信息（但不切换模式）
-            if (channelListPanel != null) {
-                channelListPanel.onShiyiPlaybackStarted();
-            }
+            showChannelInfo();
         }
     }
 
