@@ -84,8 +84,7 @@ import xyz.doikki.videoplayer.player.VideoView;
 import xyz.doikki.videoplayer.util.PlayerUtils;
 
 /**
- * LivePlayActivity - 最终完整稳定修复版
- * 已完全修复根本错误：每次唤出列表都强制高亮当前正在播放的节目
+ * LivePlayActivity - 最终完整稳定修复版（已完全还原原脚本记忆与高亮机制）
  */
 public class LivePlayActivity extends BaseActivity {
 
@@ -351,20 +350,16 @@ public class LivePlayActivity extends BaseActivity {
         EventBus.getDefault().register(this);
         setLoadSir(findViewById(R.id.live_root));
         mVideoView = findViewById(R.id.mVideoView);
-
         tvSelectedChannel = findViewById(R.id.tv_selected_channel);
         tv_size = findViewById(R.id.tv_size);
         tv_source = findViewById(R.id.tv_source);
         tv_sys_time = findViewById(R.id.tv_sys_time);
-
         llSeekBar = findViewById(R.id.ll_seekbar);
         mCurrentTime = findViewById(R.id.curr_time);
         mSeekBar = findViewById(R.id.seekBar);
         mTotalTime = findViewById(R.id.total_time);
-
         mBack = findViewById(R.id.tvBackButton);
         mBack.setVisibility(View.INVISIBLE);
-
         tvBottomLayout = findViewById(R.id.tvBottomLayout);
         tvBottomLayout.setVisibility(View.INVISIBLE);
         tv_channelname = findViewById(R.id.tv_channel_name);
@@ -374,14 +369,12 @@ public class LivePlayActivity extends BaseActivity {
         tv_curr_name = findViewById(R.id.tv_current_program_name);
         tv_next_time = findViewById(R.id.tv_next_program_time);
         tv_next_name = findViewById(R.id.tv_next_program_name);
-
         mGroupEPG = findViewById(R.id.mGroupEPG);
         mDivRight = findViewById(R.id.mDivRight);
         mDivLeft = findViewById(R.id.mDivLeft);
         mEpgDateGridView = findViewById(R.id.mEpgDateGridView);
         mEpgInfoGridView = findViewById(R.id.mEpgInfoGridView);
 
-        // 初始化设置面板
         LinearLayout tvRightSettingLayout = findViewById(R.id.tvRightSettingLayout);
         TvRecyclerView mSettingGroupView = findViewById(R.id.mSettingGroupView);
         TvRecyclerView mSettingItemView = findViewById(R.id.mSettingItemView);
@@ -394,18 +387,64 @@ public class LivePlayActivity extends BaseActivity {
                     playChannel(currentChannelGroupIndex, currentLiveChannelIndex, true);
                 }
             }
-            @Override public void onScaleChanged(int scaleIndex) { /* 省略具体实现，与之前一致 */ }
-            @Override public void onPlayerTypeChanged(int typeIndex) { /* 省略具体实现，与之前一致 */ }
-            @Override public void onTimeoutChanged(int timeoutIndex) { Hawk.put(HawkConfig.LIVE_CONNECT_TIMEOUT, timeoutIndex); }
+            @Override public void onScaleChanged(int scaleIndex) {
+                try {
+                    livePlayerManager.changeLivePlayerScale(mVideoView, scaleIndex, currentLiveChannelItem != null ? currentLiveChannelItem.getChannelName() : "");
+                    Toast.makeText(LivePlayActivity.this, currentLiveChannelItem != null ? "画面比例已应用" : "画面比例已设置", Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    Toast.makeText(LivePlayActivity.this, "设置失败", Toast.LENGTH_SHORT).show();
+                }
+            }
+            @Override public void onPlayerTypeChanged(int typeIndex) {
+                try {
+                    if (currentLiveChannelItem != null) mVideoView.release();
+                    livePlayerManager.changeLivePlayerType(mVideoView, typeIndex, currentLiveChannelItem != null ? currentLiveChannelItem.getChannelName() : "");
+                    if (currentLiveChannelItem != null) {
+                        mVideoView.setUrl(currentLiveChannelItem.getUrl(), setPlayHeaders(currentLiveChannelItem.getUrl()));
+                        mVideoView.start();
+                    }
+                    Toast.makeText(LivePlayActivity.this, currentLiveChannelItem != null ? "解码方式已应用" : "解码方式已设置", Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    Toast.makeText(LivePlayActivity.this, "设置失败", Toast.LENGTH_SHORT).show();
+                }
+            }
+            @Override public void onTimeoutChanged(int timeoutIndex) {
+                Hawk.put(HawkConfig.LIVE_CONNECT_TIMEOUT, timeoutIndex);
+            }
             @Override public void onPreferenceChanged(String key, boolean value) {
                 if (HawkConfig.LIVE_SHOW_TIME.equals(key)) showTime();
                 else if (HawkConfig.LIVE_SHOW_NET_SPEED.equals(key)) showNetSpeed();
             }
-            @Override public void onLiveAddressSelected() { /* 省略具体实现，与之前一致 */ }
+            @Override public void onLiveAddressSelected() {
+                ArrayList<String> liveHistory = Hawk.get(HawkConfig.LIVE_HISTORY, new ArrayList<>());
+                if (liveHistory.isEmpty()) return;
+                String current = Hawk.get(HawkConfig.LIVE_URL, "");
+                int idx = liveHistory.contains(current) ? liveHistory.indexOf(current) : 0;
+                ApiHistoryDialog dialog = new ApiHistoryDialog(LivePlayActivity.this);
+                dialog.setTip(getString(R.string.dia_history_live));
+                dialog.setAdapter(new ApiHistoryDialogAdapter.SelectDialogInterface() {
+                    @Override
+                    public void click(String liveURL) {
+                        Hawk.put(HawkConfig.LIVE_URL, liveURL);
+                        liveChannelGroupList.clear();
+                        try {
+                            liveURL = Base64.encodeToString(liveURL.getBytes("UTF-8"), Base64.DEFAULT | Base64.URL_SAFE | Base64.NO_WRAP);
+                            loadProxyLives("http://127.0.0.1:9978/proxy?do=live&type=txt&ext=" + liveURL);
+                        } catch (Throwable th) {
+                            th.printStackTrace();
+                        }
+                        dialog.dismiss();
+                    }
+                    @Override
+                    public void del(String value, ArrayList<String> data) {
+                        Hawk.put(HawkConfig.LIVE_HISTORY, data);
+                    }
+                }, liveHistory, idx);
+                dialog.show();
+            }
             @Override public void onExit() { finish(); }
         });
 
-        // 初始化频道列表面板
         LinearLayout tvLeftChannelListLayout = findViewById(R.id.tvLeftChannelListLayout);
         TvRecyclerView mGroupGridView = findViewById(R.id.mGroupGridView);
         TvRecyclerView mChannelGridView = findViewById(R.id.mChannelGridView);
@@ -602,7 +641,6 @@ public class LivePlayActivity extends BaseActivity {
         } else if (settingsPanel != null && settingsPanel.isShowing()) {
             settingsPanel.hide();
         } else if (channelListPanel != null) {
-            // 关键修复：每次唤出都强制同步并显示
             channelListPanel.syncHighlightFromActivity(currentChannelGroupIndex, currentLiveChannelIndex);
             channelListPanel.show();
             mHandler.post(tv_sys_timeRunnable);
@@ -943,7 +981,56 @@ public class LivePlayActivity extends BaseActivity {
                 return true;
             }
             @Override public void longPress() { showSettingGroup(); }
-            @Override public void playStateChanged(int playState) { /* 与你之前版本一致 */ }
+            @Override public void playStateChanged(int playState) {
+                if (currentLiveChannelItem == null) return;
+                switch (playState) {
+                    case VideoView.STATE_IDLE:
+                    case VideoView.STATE_PAUSED:
+                        break;
+                    case VideoView.STATE_PREPARED:
+                        if (mVideoView.getVideoSize().length >= 2) {
+                            tv_size.setText(mVideoView.getVideoSize()[0] + " x " + mVideoView.getVideoSize()[1]);
+                        }
+                        int duration = (int) mVideoView.getDuration();
+                        if (duration > 0) {
+                            isVOD = true;
+                            llSeekBar.setVisibility(View.VISIBLE);
+                            mSeekBar.setMax(duration);
+                            mSeekBar.setProgress(0);
+                            mTotalTime.setText(stringForTimeVod(duration));
+                        } else {
+                            isVOD = false;
+                            llSeekBar.setVisibility(View.GONE);
+                        }
+                        break;
+                    case VideoView.STATE_BUFFERED:
+                    case VideoView.STATE_PLAYING:
+                        currentLiveChangeSourceTimes = 0;
+                        mHandler.removeCallbacks(mConnectTimeoutChangeSourceRun);
+                        mHandler.removeCallbacks(mConnectTimeoutReplayRun);
+                        break;
+                    case VideoView.STATE_ERROR:
+                    case VideoView.STATE_PLAYBACK_COMPLETED:
+                        mHandler.removeCallbacks(mConnectTimeoutChangeSourceRun);
+                        mHandler.removeCallbacks(mConnectTimeoutReplayRun);
+                        if (Hawk.get(HawkConfig.LIVE_CONNECT_TIMEOUT, 2) == 0) {
+                            mHandler.postDelayed(mConnectTimeoutReplayRun, 30 * 1000L);
+                        } else {
+                            mHandler.post(mConnectTimeoutChangeSourceRun);
+                        }
+                        break;
+                    case VideoView.STATE_PREPARING:
+                    case VideoView.STATE_BUFFERING:
+                        mHandler.removeCallbacks(mConnectTimeoutChangeSourceRun);
+                        mHandler.removeCallbacks(mConnectTimeoutReplayRun);
+                        if (Hawk.get(HawkConfig.LIVE_CONNECT_TIMEOUT, 2) == 0) {
+                            mHandler.postDelayed(mConnectTimeoutReplayRun, 30 * 1000L);
+                        } else {
+                            mHandler.postDelayed(mConnectTimeoutChangeSourceRun, Hawk.get(HawkConfig.LIVE_CONNECT_TIMEOUT, 2) * 5000L);
+                        }
+                        break;
+                }
+            }
             @Override public void changeSource(int direction) {
                 if (direction > 0) playNextSource();
                 else playPreSource();
