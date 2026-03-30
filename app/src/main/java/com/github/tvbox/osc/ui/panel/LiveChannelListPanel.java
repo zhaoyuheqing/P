@@ -27,9 +27,9 @@ import java.util.List;
 
 /**
  * 左侧频道列表面板 - 最终修复版（焦点完全修复）
- * 修复：
+ * 已修复：
  * - 每次显示时强制同步当前直播频道的高亮，并请求焦点
- * - 增加延迟 Runnable 确保滚动稳定后再设置焦点
+ * - 增加延迟 Runnable 确保滚动稳定后再设置焦点（完全模拟原脚本 mFocusCurrentChannelAndShowChannelList）
  * - 切换模式时重新同步高亮
  */
 public class LiveChannelListPanel {
@@ -72,7 +72,7 @@ public class LiveChannelListPanel {
     private final Runnable hideRunnable = this::hideInternal;
     private final Runnable focusAndShowRunnable = this::focusAndShowInternal;
 
-    // 新增：强制高亮当前直播频道的 Runnable（模拟原脚本的 mFocusCurrentChannelAndShowChannelList）
+    // 强制高亮当前直播频道的 Runnable（完全模拟原脚本 mFocusCurrentChannelAndShowChannelList）
     private final Runnable focusCurrentChannelRunnable = new Runnable() {
         @Override
         public void run() {
@@ -80,24 +80,20 @@ public class LiveChannelListPanel {
             TvRecyclerView channelView = channelViewRef.get();
             if (groupView == null || channelView == null || groupAdapter == null || channelAdapter == null) return;
 
-            // 等待滚动完成，避免在滚动中设置焦点
             if (groupView.isScrolling() || channelView.isScrolling() ||
                     groupView.isComputingLayout() || channelView.isComputingLayout()) {
                 handler.postDelayed(this, 100);
                 return;
             }
 
-            // 强制设置选中索引（确保高亮）
             groupAdapter.setSelectedGroupIndex(currentGroupIndex);
             channelAdapter.setSelectedChannelIndex(currentChannelIndex);
 
-            // 滚动到当前位置
             groupView.scrollToPosition(currentGroupIndex);
             groupView.setSelection(currentGroupIndex);
             channelView.scrollToPosition(currentChannelIndex);
             channelView.setSelection(currentChannelIndex);
 
-            // 关键：对具体频道 item 请求焦点
             if (currentChannelIndex >= 0 && currentChannelIndex < channelAdapter.getItemCount()) {
                 RecyclerView.ViewHolder holder = channelView.findViewHolderForAdapterPosition(currentChannelIndex);
                 if (holder != null) {
@@ -204,11 +200,7 @@ public class LiveChannelListPanel {
     }
 
     public void showEpgMode() {
-        if (isEpgMode) {
-            handler.removeCallbacks(hideRunnable);
-            handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
-            return;
-        }
+        if (isEpgMode) return;
         isEpgMode = true;
         setEpgViewsVisible(true);
         setChannelViewsVisible(false);
@@ -219,37 +211,25 @@ public class LiveChannelListPanel {
     }
 
     public void showChannelMode() {
-        if (!isEpgMode) {
-            handler.removeCallbacks(hideRunnable);
-            handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
-            return;
-        }
+        if (!isEpgMode) return;
         isEpgMode = false;
         setEpgViewsVisible(false);
         setChannelViewsVisible(true);
 
         if (listener != null) {
             listener.onEpgModeChanged(false);
-            // 切换模式时重新加载数据，并强制同步高亮
             refreshFull(listener.getChannelGroups(), listener.getCurrentGroupIndex(), listener.getCurrentChannelIndex());
-            // 延迟执行焦点请求，确保适配器数据已应用
             handler.postDelayed(focusCurrentChannelRunnable, 200);
         }
         handler.removeCallbacks(hideRunnable);
         handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
     }
 
-    public void onShiyiPlaybackStarted() {
-        if (listener != null) listener.onShiyiPlaybackStarted();
-    }
-
     public void show() {
         if (isShowing) {
-            // 关键修复：面板已显示时，再次唤出也要重新同步高亮和焦点
             handler.removeCallbacks(hideRunnable);
             handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
 
-            // 重新同步高亮（如果当前是频道模式）
             if (!isEpgMode && listener != null) {
                 syncHighlightFromActivity(listener.getCurrentGroupIndex(), listener.getCurrentChannelIndex());
                 handler.postDelayed(focusCurrentChannelRunnable, 200);
@@ -268,7 +248,6 @@ public class LiveChannelListPanel {
         }
 
         handler.postDelayed(focusAndShowRunnable, 200);
-        // 额外延迟执行焦点请求，确保动画完成
         handler.postDelayed(focusCurrentChannelRunnable, 300);
         isShowing = true;
     }
@@ -303,20 +282,6 @@ public class LiveChannelListPanel {
 
         if (divRight != null) divRight.setVisibility(visible ? View.VISIBLE : View.GONE);
         if (groupView != null) groupView.setVisibility(visible ? View.VISIBLE : View.GONE);
-    }
-
-    private void scrollToCurrent(int groupIndex, int channelIndex) {
-        TvRecyclerView gv = groupViewRef.get();
-        if (gv != null && groupIndex >= 0) {
-            gv.scrollToPosition(groupIndex);
-            gv.setSelection(groupIndex);
-        }
-
-        TvRecyclerView cv = channelViewRef.get();
-        if (cv != null && channelIndex >= 0) {
-            cv.scrollToPosition(channelIndex);
-            cv.setSelection(channelIndex);
-        }
     }
 
     private void initGroupView() {
@@ -432,7 +397,6 @@ public class LiveChannelListPanel {
             channelView.setSelection(currentChannel);
         }
 
-        // 分组列表请求焦点（原脚本也如此）
         groupView.requestFocus();
 
         rootView.setVisibility(View.VISIBLE);
