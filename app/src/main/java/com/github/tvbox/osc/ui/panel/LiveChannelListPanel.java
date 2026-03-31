@@ -64,8 +64,10 @@ public class LiveChannelListPanel {
 
     private final Runnable hideRunnable = this::hideInternal;
 
-    // 简化后的焦点同步逻辑：仅使用 setSelection，并确保在布局完成后执行
     private final Runnable focusCurrentChannelRunnable = new Runnable() {
+        private int retryCount = 0;
+        private static final int MAX_RETRY = 5;
+
         @Override
         public void run() {
             TvRecyclerView groupView = groupViewRef.get();
@@ -75,9 +77,45 @@ public class LiveChannelListPanel {
             int groupIdx = listener.getCurrentGroupIndex();
             int channelIdx = listener.getCurrentChannelIndex();
 
-            // 仅使用 setSelection，它内部会处理滚动和焦点
+            if (groupAdapter != null) {
+                groupAdapter.setSelectedGroupIndex(groupIdx);
+                groupAdapter.setFocusedGroupIndex(groupIdx);
+            }
+            if (channelAdapter != null) {
+                channelAdapter.setSelectedChannelIndex(channelIdx);
+                channelAdapter.setFocusedChannelIndex(channelIdx);
+            }
+
+            // 等待滚动和布局完成
+            if (groupView.isScrolling() || channelView.isScrolling() ||
+                    groupView.isComputingLayout() || channelView.isComputingLayout()) {
+                if (retryCount++ < MAX_RETRY) {
+                    handler.postDelayed(this, 100);
+                }
+                return;
+            }
+
+            // 布局完成，执行滚动和选中
+            groupView.scrollToPosition(groupIdx);
             groupView.setSelection(groupIdx);
-            channelView.setSelection(channelIdx);
+            channelView.post(() -> {
+                channelView.scrollToPosition(channelIdx);
+                channelView.setSelection(channelIdx);
+                // 尝试获取 ViewHolder 并请求焦点
+                RecyclerView.ViewHolder holder = channelView.findViewHolderForAdapterPosition(channelIdx);
+                if (holder != null && holder.itemView != null) {
+                    holder.itemView.requestFocus();
+                } else {
+                    // 如果 holder 还没准备好，再尝试一次
+                    channelView.post(() -> {
+                        RecyclerView.ViewHolder holder2 = channelView.findViewHolderForAdapterPosition(channelIdx);
+                        if (holder2 != null && holder2.itemView != null) {
+                            holder2.itemView.requestFocus();
+                        }
+                    });
+                }
+            });
+            retryCount = 0;
         }
     };
 
@@ -108,129 +146,77 @@ public class LiveChannelListPanel {
         initChannelView();
     }
 
-    public void syncHighlightFromActivity(int groupIndex, int channelIndex) {
-        if (groupAdapter != null) {
-            groupAdapter.setSelectedGroupIndex(groupIndex);
-            groupAdapter.setFocusedGroupIndex(groupIndex);
-        }
-        if (channelAdapter != null) {
-            channelAdapter.setSelectedChannelIndex(channelIndex);
-            channelAdapter.setFocusedChannelIndex(channelIndex);
-        }
-    }
-
+    // ---------- 数据刷新 ----------
     public void refreshFull(List<LiveChannelGroup> groups, int groupIndex, int channelIndex) {
         if (groupAdapter != null) {
             groupAdapter.setNewData(groups);
             groupAdapter.setSelectedGroupIndex(groupIndex);
         }
-        List<LiveChannelItem> channels = listener != null ? listener.getLiveChannels(groupIndex) : new ArrayList<>();
         if (channelAdapter != null) {
+            List<LiveChannelItem> channels = listener != null ? listener.getLiveChannels(groupIndex) : new ArrayList<>();
             channelAdapter.setNewData(channels);
             channelAdapter.setSelectedChannelIndex(channelIndex);
         }
-        // 数据刷新后，在布局完成后同步焦点
-        TvRecyclerView channelView = channelViewRef.get();
-        if (channelView != null) {
-            channelView.post(() -> channelView.setSelection(channelIndex));
-        }
-    }
-
-    public void refreshChannelData(List<LiveChannelItem> channels, int channelIndex) {
-        if (channelAdapter != null) {
-            channelAdapter.setNewData(channels);
-            channelAdapter.setSelectedChannelIndex(channelIndex);
-        }
-        // 数据刷新后，在布局完成后同步焦点
-        TvRecyclerView channelView = channelViewRef.get();
-        if (channelView != null) {
-            channelView.post(() -> channelView.setSelection(channelIndex));
-        }
-    }
-
-    public void updateSelectionAndScroll(int groupIndex, int channelIndex) {
-        if (groupAdapter != null) groupAdapter.setSelectedGroupIndex(groupIndex);
-        if (channelAdapter != null) channelAdapter.setSelectedChannelIndex(channelIndex);
-        // 确保焦点同步
-        TvRecyclerView groupView = groupViewRef.get();
-        TvRecyclerView channelView = channelViewRef.get();
-        if (groupView != null) groupView.setSelection(groupIndex);
-        if (channelView != null) channelView.setSelection(channelIndex);
     }
 
     public void loadGroup(int groupIndex, List<LiveChannelGroup> allGroups) {
         if (isEpgMode) showChannelMode();
         if (groupAdapter != null) groupAdapter.setSelectedGroupIndex(groupIndex);
-
-        // 分组改变后，频道列表应显示第一个频道（不播放），所以选中项设为 0
-        int targetIndex = 0;
-
+        int targetChannelIndex = listener != null ? listener.getCurrentChannelIndex() : 0;
         List<LiveChannelItem> channels = listener != null ? listener.getLiveChannels(groupIndex) : new ArrayList<>();
         if (channelAdapter != null) {
             channelAdapter.setNewData(channels);
-            channelAdapter.setSelectedChannelIndex(targetIndex);
+            channelAdapter.setSelectedChannelIndex(targetChannelIndex);
         }
-        syncHighlightFromActivity(groupIndex, targetIndex);
-        // 布局完成后同步焦点
-        TvRecyclerView channelView = channelViewRef.get();
-        if (channelView != null) {
-            channelView.post(() -> channelView.setSelection(targetIndex));
-        }
+        // 焦点恢复会在 show() 中触发，此处不需要
     }
 
+    // ---------- EPG 回调 ----------
     public void notifyEpgClicked(Epginfo item, int dateIndex) {
-        if (listener != null) listener.onEpgItemClicked(item, dateIndex);
+        resetHideTimer(); // 点击时重置自动隐藏
+        if (listener != null) {
+            listener.onEpgItemClicked(item, dateIndex);
+        }
     }
 
+    // ---------- 模式切换 ----------
     public void showEpgMode() {
         if (isEpgMode) return;
         isEpgMode = true;
         setEpgViewsVisible(true);
         setChannelViewsVisible(false);
         if (listener != null) listener.onEpgModeChanged(true);
-        // 显示后重置定时器
-        handler.removeCallbacks(hideRunnable);
-        handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
+        resetHideTimer();
     }
 
     public void showChannelMode() {
-        if (!isEpgMode) return;
-        isEpgMode = false;
-        setEpgViewsVisible(false);
-        setChannelViewsVisible(true);
-        if (listener != null) {
-            listener.onEpgModeChanged(false);
-            // 刷新频道数据，保证列表显示正确
-            int groupIdx = listener.getCurrentGroupIndex();
-            int channelIdx = listener.getCurrentChannelIndex();
-            refreshFull(listener.getChannelGroups(), groupIdx, channelIdx);
+        if (isEpgMode) {
+            // 从 EPG 模式切回频道模式
+            isEpgMode = false;
+            setEpgViewsVisible(false);
+            setChannelViewsVisible(true);
+            if (listener != null) {
+                listener.onEpgModeChanged(false);
+                refreshFull(listener.getChannelGroups(), listener.getCurrentGroupIndex(), listener.getCurrentChannelIndex());
+            }
+        } else {
+            // 已经是频道模式，但确保视图可见性并刷新（防止数据陈旧）
+            setEpgViewsVisible(false);
+            setChannelViewsVisible(true);
+            if (listener != null) {
+                refreshFull(listener.getChannelGroups(), listener.getCurrentGroupIndex(), listener.getCurrentChannelIndex());
+            }
         }
-        handler.removeCallbacks(hideRunnable);
-        handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
-        // 在布局完成后同步焦点
-        TvRecyclerView channelView = channelViewRef.get();
-        if (channelView != null) {
-            channelView.post(focusCurrentChannelRunnable);
-        }
+        resetHideTimer();
     }
 
+    // ---------- 显示/隐藏 ----------
     public void show() {
         LinearLayout rootView = rootViewRef.get();
         if (rootView == null) return;
 
-        if (isEpgMode) {
-            setEpgViewsVisible(true);
-            setChannelViewsVisible(false);
-        } else {
-            // 显示频道模式前，先刷新数据
-            if (listener != null) {
-                int groupIdx = listener.getCurrentGroupIndex();
-                int channelIdx = listener.getCurrentChannelIndex();
-                refreshFull(listener.getChannelGroups(), groupIdx, channelIdx);
-            }
-            setEpgViewsVisible(false);
-            setChannelViewsVisible(true);
-        }
+        if (isEpgMode) showEpgMode();
+        else showChannelMode();
 
         if (rootView.getVisibility() != View.VISIBLE) {
             rootView.setVisibility(View.VISIBLE);
@@ -244,18 +230,18 @@ public class LiveChannelListPanel {
                     .setListener(new AnimatorListenerAdapter() {
                         @Override
                         public void onAnimationEnd(Animator animation) {
-                            // 动画结束后强制同步焦点
+                            handler.removeCallbacks(focusCurrentChannelRunnable);
                             handler.post(focusCurrentChannelRunnable);
                         }
                     });
         } else {
-            // 如果已经可见，仍然需要同步焦点
+            // 如果已经可见，也重新请求焦点（例如从其他界面返回）
+            handler.removeCallbacks(focusCurrentChannelRunnable);
             handler.post(focusCurrentChannelRunnable);
         }
 
         isShowing = true;
-        handler.removeCallbacks(hideRunnable);
-        handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
+        resetHideTimer();
     }
 
     public void hide() {
@@ -266,6 +252,12 @@ public class LiveChannelListPanel {
         return isShowing;
     }
 
+    public void resetHideTimer() {
+        handler.removeCallbacks(hideRunnable);
+        handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
+    }
+
+    // ---------- 内部方法 ----------
     private void setEpgViewsVisible(boolean visible) {
         LinearLayout groupEpg = groupEpgRef.get();
         LinearLayout divLeft = divLeftRef.get();
@@ -292,15 +284,11 @@ public class LiveChannelListPanel {
         groupView.setOnItemListener(new TvRecyclerView.OnItemListener() {
             @Override
             public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {}
-
             @Override
             public void onItemSelected(TvRecyclerView parent, View itemView, int position) {
                 if (groupAdapter != null) groupAdapter.setFocusedGroupIndex(position);
-                // 分组列表焦点移动时，重置自动隐藏定时器
-                handler.removeCallbacks(hideRunnable);
-                handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
+                resetHideTimer(); // 移动焦点时重置自动隐藏计时器
             }
-
             @Override
             public void onItemClick(TvRecyclerView parent, View itemView, int position) {
                 FastClickCheckUtil.check(itemView);
@@ -323,17 +311,13 @@ public class LiveChannelListPanel {
         channelView.setOnItemListener(new TvRecyclerView.OnItemListener() {
             @Override
             public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {}
-
             @Override
             public void onItemSelected(TvRecyclerView parent, View itemView, int position) {
                 if (position < 0) return;
                 if (groupAdapter != null) groupAdapter.setFocusedGroupIndex(-1);
                 if (channelAdapter != null) channelAdapter.setFocusedChannelIndex(position);
-                // 频道列表焦点移动时，重置自动隐藏定时器
-                handler.removeCallbacks(hideRunnable);
-                handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
+                resetHideTimer(); // 移动焦点时重置自动隐藏计时器
             }
-
             @Override
             public void onItemClick(TvRecyclerView parent, View itemView, int position) {
                 clickChannel(position);
@@ -346,6 +330,7 @@ public class LiveChannelListPanel {
     }
 
     private void clickChannel(int position) {
+        resetHideTimer(); // 点击时重置自动隐藏
         if (listener == null || groupAdapter == null) return;
         int groupIndex = groupAdapter.getSelectedGroupIndex();
         if (groupIndex < 0) return;
