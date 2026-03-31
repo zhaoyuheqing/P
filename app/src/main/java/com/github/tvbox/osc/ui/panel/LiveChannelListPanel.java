@@ -26,11 +26,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 左侧频道列表面板 - 最终完整版（已100%还原原脚本高亮记忆机制）
- * 关键修复：
- * - 每次 show() 无条件强制从 Activity 同步当前直播索引并高亮
- * - focusCurrentChannelRunnable 无限重试 + 每次执行前强制 sync
- * - 动画结束后再次触发高亮（双保险）
+ * LiveChannelListPanel - 最终纯UI版（已按最新判断优化）
+ * - focus 带重试机制
+ * - 只负责 UI，不保存状态
  */
 public class LiveChannelListPanel {
 
@@ -38,8 +36,9 @@ public class LiveChannelListPanel {
         void onGroupSelected(int groupIndex);
         void onChannelSelected(int groupIndex, int channelIndex);
         void onEpgModeChanged(boolean isEpg);
-        void onShiyiPlaybackStarted();
+
         List<LiveChannelGroup> getChannelGroups();
+        List<LiveChannelItem> getLiveChannels(int groupIndex);
         int getCurrentGroupIndex();
         int getCurrentChannelIndex();
         void updateCurrentChannel(int groupIndex, int channelIndex);
@@ -66,9 +65,6 @@ public class LiveChannelListPanel {
     private boolean isShowing = false;
     private boolean isEpgMode = false;
 
-    private int currentGroupIndex = 0;
-    private int currentChannelIndex = -1;
-
     private final Runnable hideRunnable = this::hideInternal;
 
     private final Runnable focusCurrentChannelRunnable = new Runnable() {
@@ -79,13 +75,18 @@ public class LiveChannelListPanel {
         public void run() {
             TvRecyclerView groupView = groupViewRef.get();
             TvRecyclerView channelView = channelViewRef.get();
-            if (groupView == null || channelView == null || groupAdapter == null || channelAdapter == null) return;
+            if (groupView == null || channelView == null || listener == null) return;
 
-            // 每次执行前强制从 Activity 同步当前直播索引（核心修复）
-            if (listener != null) {
-                currentGroupIndex = listener.getCurrentGroupIndex();
-                currentChannelIndex = listener.getCurrentChannelIndex();
-                syncHighlightFromActivity(currentGroupIndex, currentChannelIndex);
+            int groupIdx = listener.getCurrentGroupIndex();
+            int channelIdx = listener.getCurrentChannelIndex();
+
+            if (groupAdapter != null) {
+                groupAdapter.setSelectedGroupIndex(groupIdx);
+                groupAdapter.setFocusedGroupIndex(groupIdx);
+            }
+            if (channelAdapter != null) {
+                channelAdapter.setSelectedChannelIndex(channelIdx);
+                channelAdapter.setFocusedChannelIndex(channelIdx);
             }
 
             if (groupView.isScrolling() || channelView.isScrolling() ||
@@ -96,16 +97,13 @@ public class LiveChannelListPanel {
                 return;
             }
 
-            groupAdapter.setSelectedGroupIndex(currentGroupIndex);
-            channelAdapter.setSelectedChannelIndex(currentChannelIndex);
+            groupView.scrollToPosition(groupIdx);
+            groupView.setSelection(groupIdx);
+            channelView.scrollToPosition(channelIdx);
+            channelView.setSelection(channelIdx);
 
-            groupView.scrollToPosition(currentGroupIndex);
-            groupView.setSelection(currentGroupIndex);
-            channelView.scrollToPosition(currentChannelIndex);
-            channelView.setSelection(currentChannelIndex);
-
-            if (currentChannelIndex >= 0 && currentChannelIndex < channelAdapter.getItemCount()) {
-                RecyclerView.ViewHolder holder = channelView.findViewHolderForAdapterPosition(currentChannelIndex);
+            if (channelIdx >= 0 && channelIdx < channelAdapter.getItemCount()) {
+                RecyclerView.ViewHolder holder = channelView.findViewHolderForAdapterPosition(channelIdx);
                 if (holder != null && holder.itemView != null) {
                     holder.itemView.requestFocus();
                     retryCount = 0;
@@ -115,20 +113,17 @@ public class LiveChannelListPanel {
 
             if (retryCount++ < MAX_RETRY) {
                 handler.postDelayed(this, 100);
+            } else {
+                retryCount = 0;
             }
         }
     };
 
-    public LiveChannelListPanel(@NonNull Context context,
-                                @NonNull Handler handler,
-                                @NonNull LinearLayout rootView,
-                                @NonNull TvRecyclerView groupView,
-                                @NonNull TvRecyclerView channelView,
-                                @NonNull LinearLayout groupEpg,
-                                @NonNull LinearLayout divLeft,
-                                @NonNull LinearLayout divRight,
-                                @NonNull TvRecyclerView epgDate,
-                                @NonNull TvRecyclerView epgInfo) {
+    public LiveChannelListPanel(@NonNull Context context, @NonNull Handler handler,
+                                @NonNull LinearLayout rootView, @NonNull TvRecyclerView groupView,
+                                @NonNull TvRecyclerView channelView, @NonNull LinearLayout groupEpg,
+                                @NonNull LinearLayout divLeft, @NonNull LinearLayout divRight,
+                                @NonNull TvRecyclerView epgDate, @NonNull TvRecyclerView epgInfo) {
 
         this.contextRef = new WeakReference<>(context);
         this.handler = handler;
@@ -154,8 +149,6 @@ public class LiveChannelListPanel {
     }
 
     public void syncHighlightFromActivity(int groupIndex, int channelIndex) {
-        this.currentGroupIndex = groupIndex;
-        this.currentChannelIndex = channelIndex;
         if (groupAdapter != null) {
             groupAdapter.setSelectedGroupIndex(groupIndex);
             groupAdapter.setFocusedGroupIndex(groupIndex);
@@ -167,42 +160,28 @@ public class LiveChannelListPanel {
     }
 
     public void refreshFull(List<LiveChannelGroup> groups, int groupIndex, int channelIndex) {
-        this.currentGroupIndex = groupIndex;
-        this.currentChannelIndex = channelIndex;
         if (groupAdapter != null) {
             groupAdapter.setNewData(groups);
             groupAdapter.setSelectedGroupIndex(groupIndex);
         }
-        List<LiveChannelItem> channels = null;
-        if (groupIndex >= 0 && groups != null && groupIndex < groups.size()) {
-            channels = groups.get(groupIndex).getLiveChannels();
-        }
+        List<LiveChannelItem> channels = listener != null ? listener.getLiveChannels(groupIndex) : new ArrayList<>();
         if (channelAdapter != null) {
-            channelAdapter.setNewData(channels != null ? channels : new ArrayList<>());
+            channelAdapter.setNewData(channels);
             channelAdapter.setSelectedChannelIndex(channelIndex);
         }
     }
 
     public void updateSelectionAndScroll(int groupIndex, int channelIndex) {
-        this.currentGroupIndex = groupIndex;
-        this.currentChannelIndex = channelIndex;
         if (groupAdapter != null) groupAdapter.setSelectedGroupIndex(groupIndex);
         if (channelAdapter != null) channelAdapter.setSelectedChannelIndex(channelIndex);
     }
 
     public void loadGroup(int groupIndex, List<LiveChannelGroup> allGroups) {
-        if (isEpgMode) {
-            showChannelMode();
-        }
-        if (groupAdapter != null) {
-            groupAdapter.setSelectedGroupIndex(groupIndex);
-        }
-        List<LiveChannelItem> channels = null;
-        if (groupIndex >= 0 && allGroups != null && groupIndex < allGroups.size()) {
-            channels = allGroups.get(groupIndex).getLiveChannels();
-        }
+        if (isEpgMode) showChannelMode();
+        if (groupAdapter != null) groupAdapter.setSelectedGroupIndex(groupIndex);
+        List<LiveChannelItem> channels = listener != null ? listener.getLiveChannels(groupIndex) : new ArrayList<>();
         if (channelAdapter != null) {
-            channelAdapter.setNewData(channels != null ? channels : new ArrayList<>());
+            channelAdapter.setNewData(channels);
             channelAdapter.setSelectedChannelIndex(0);
         }
         syncHighlightFromActivity(groupIndex, 0);
@@ -232,14 +211,9 @@ public class LiveChannelListPanel {
         handler.postDelayed(focusCurrentChannelRunnable, 220);
     }
 
-    public void onShiyiPlaybackStarted() {
-        if (listener != null) listener.onShiyiPlaybackStarted();
-    }
-
     public void show() {
-        if (listener != null) {
-            syncHighlightFromActivity(listener.getCurrentGroupIndex(), listener.getCurrentChannelIndex());
-        }
+        LinearLayout rootView = rootViewRef.get();
+        if (rootView == null) return;
 
         if (isEpgMode) {
             showEpgMode();
@@ -247,8 +221,7 @@ public class LiveChannelListPanel {
             showChannelMode();
         }
 
-        LinearLayout rootView = rootViewRef.get();
-        if (rootView != null && rootView.getVisibility() != View.VISIBLE) {
+        if (rootView.getVisibility() != View.VISIBLE) {
             rootView.setVisibility(View.VISIBLE);
             rootView.setAlpha(0.0f);
             rootView.setTranslationX(-rootView.getWidth() / 2f);
@@ -266,10 +239,6 @@ public class LiveChannelListPanel {
         }
 
         isShowing = true;
-
-        handler.removeCallbacks(focusCurrentChannelRunnable);
-        handler.postDelayed(focusCurrentChannelRunnable, 220);
-
         handler.removeCallbacks(hideRunnable);
         handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
     }
@@ -280,10 +249,6 @@ public class LiveChannelListPanel {
 
     public boolean isShowing() {
         return isShowing;
-    }
-
-    public boolean isEpgMode() {
-        return isEpgMode;
     }
 
     private void setEpgViewsVisible(boolean visible) {
