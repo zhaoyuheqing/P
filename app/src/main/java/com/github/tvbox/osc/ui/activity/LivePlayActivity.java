@@ -83,9 +83,6 @@ import okhttp3.Request;
 import xyz.doikki.videoplayer.player.VideoView;
 import xyz.doikki.videoplayer.util.PlayerUtils;
 
-/**
- * LivePlayActivity - 最终稳定版（已完全符合最新判断 + 编译通过）
- */
 public class LivePlayActivity extends BaseActivity implements LiveChannelListPanel.ChannelListListener {
 
     private VideoView mVideoView;
@@ -142,9 +139,8 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
     private boolean isShiyiMode = false;
     private static String shiyi_time;
 
-    boolean mIsDragging;   // 必须提前声明，避免前向引用
+    boolean mIsDragging;
 
-    // ==================== Runnable（全部改回匿名内部类） ====================
     private final Runnable mHideChannelInfoRun = new Runnable() {
         @Override
         public void run() {
@@ -250,7 +246,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
     private long mExitTime = 0;
     private boolean onStopCalled;
 
-    // ==================== 工具方法 ====================
     private HashMap<String, String> setPlayHeaders(String url) {
         HashMap<String, String> header = new HashMap<>();
         try {
@@ -349,7 +344,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         });
     }
 
-    // ==================== 生命周期 ====================
     @Override
     protected int getLayoutResID() {
         return R.layout.activity_live_play;
@@ -359,9 +353,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
     protected void init() {
         hideSystemUI(false);
         epgStringAddress = Hawk.get(HawkConfig.EPG_URL, "");
-        if (StringUtils.isBlank(epgStringAddress)) {
-            epgStringAddress = LiveConstants.DEFAULT_EPG_URL;
-        }
+        if (StringUtils.isBlank(epgStringAddress)) epgStringAddress = LiveConstants.DEFAULT_EPG_URL;
         epgCacheHelper = new EpgCacheHelper(this, epgStringAddress);
         EventBus.getDefault().register(this);
         setLoadSir(findViewById(R.id.live_root));
@@ -392,7 +384,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         mEpgDateGridView = findViewById(R.id.mEpgDateGridView);
         mEpgInfoGridView = findViewById(R.id.mEpgInfoGridView);
 
-        // 设置面板
         LinearLayout tvRightSettingLayout = findViewById(R.id.tvRightSettingLayout);
         TvRecyclerView mSettingGroupView = findViewById(R.id.mSettingGroupView);
         TvRecyclerView mSettingItemView = findViewById(R.id.mSettingItemView);
@@ -472,7 +463,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             }
         });
 
-        // 左侧面板
         LinearLayout tvLeftChannelListLayout = findViewById(R.id.tvLeftChannelListLayout);
         TvRecyclerView mGroupGridView = findViewById(R.id.mGroupGridView);
         TvRecyclerView mChannelGridView = findViewById(R.id.mChannelGridView);
@@ -516,7 +506,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         mHandler.postDelayed(mUpdateLayout, 500);
     }
 
-    // ==================== ChannelListListener 实现 ====================
+    // ==================== ChannelListListener ====================
     @Override
     public List<LiveChannelGroup> getChannelGroups() {
         return liveChannelGroupList;
@@ -577,7 +567,43 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         }
     }
 
-    // ==================== UI 显示方法 ====================
+    @Override
+    public void onEpgItemClicked(Epginfo epgItem, int selectedDateIndex) {
+        if (currentLiveChannelItem == null || epgItem == null) return;
+        Date date = epgDateAdapter.getData().get(selectedDateIndex).getDateParamVal();
+        SimpleDateFormat dateFormat = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD);
+        dateFormat.setTimeZone(TimeZone.getTimeZone("GMT+8:00"));
+        String targetDate = dateFormat.format(date);
+        String[] shiyiTimes = buildShiyiTimes(targetDate, epgItem.originStart, epgItem.originEnd);
+        String shiyiStartdate = shiyiTimes[0];
+        String shiyiEnddate = shiyiTimes[1];
+        Date now = new Date();
+        if (now.compareTo(epgItem.startdateTime) < 0) {
+            Toast.makeText(this, "未到播放时间", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        epgListAdapter.setSelectedEpgIndex(epgListAdapter.getData().indexOf(epgItem));
+        if (now.compareTo(epgItem.startdateTime) >= 0 && now.compareTo(epgItem.enddateTime) <= 0) {
+            mVideoView.release();
+            isShiyiMode = false;
+            mVideoView.setUrl(currentLiveChannelItem.getUrl(), setPlayHeaders(currentLiveChannelItem.getUrl()));
+            mVideoView.start();
+            epgListAdapter.setShiyiSelection(-1, false, timeFormat.format(date));
+        } else {
+            if (!isValidShiyiTime(shiyiStartdate, shiyiEnddate)) {
+                Toast.makeText(this, "无效的回放时间", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            mVideoView.release();
+            shiyi_time = shiyiStartdate + "-" + shiyiEnddate;
+            isShiyiMode = true;
+            String[] shiyiUrls = buildShiyiUrls(currentLiveChannelItem.getUrl(), shiyi_time);
+            mVideoView.setUrl(shiyiUrls[0], setPlayHeaders(shiyiUrls[0]));
+            mVideoView.start();
+            epgListAdapter.setShiyiSelection(epgListAdapter.getData().indexOf(epgItem), true, timeFormat.format(date));
+        }
+    }
+
     private void showChannelList() {
         mBack.setVisibility(View.INVISIBLE);
         if (tvBottomLayout.getVisibility() == View.VISIBLE) {
@@ -660,8 +686,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                 mEpgInfoGridView.post(() -> mEpgInfoGridView.smoothScrollToPosition(finalI));
             }
         } else {
-            Epginfo epgbcinfo = new Epginfo(date, LiveConstants.NO_PROGRAM, date,
-                    LiveConstants.DEFAULT_START_TIME, LiveConstants.DEFAULT_END_TIME, 0);
+            Epginfo epgbcinfo = new Epginfo(date, LiveConstants.NO_PROGRAM, date, LiveConstants.DEFAULT_START_TIME, LiveConstants.DEFAULT_END_TIME, 0);
             arrayList.add(epgbcinfo);
             epgdata = arrayList;
             epgListAdapter.setNewData(epgdata);
@@ -707,13 +732,10 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
     }
 
     private void getTvLogo(String channelName, String logoUrl) {
-        RequestOptions options = new RequestOptions()
-                .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
-                .placeholder(R.drawable.img_logo_placeholder);
+        RequestOptions options = new RequestOptions().diskCacheStrategy(DiskCacheStrategy.AUTOMATIC).placeholder(R.drawable.img_logo_placeholder);
         Glide.with(App.getInstance()).load(logoUrl).apply(options).into(tv_logo);
     }
 
-    // ==================== 播放控制 ====================
     private boolean playChannel(int channelGroupIndex, int liveChannelIndex, boolean changeSource) {
         if (channelGroupIndex >= liveChannelGroupList.size()) {
             Toast.makeText(App.getInstance(), "分组不存在", Toast.LENGTH_SHORT).show();
@@ -823,7 +845,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         playChannel(currentChannelGroupIndex, currentLiveChannelIndex, true);
     }
 
-    // ==================== EPG 初始化 ====================
     private void initEpgListView() {
         mEpgInfoGridView.setHasFixedSize(true);
         mEpgInfoGridView.setLayoutManager(new V7LinearLayoutManager(this.mContext, 1, false));
@@ -840,20 +861,31 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             }
             @Override
             public void onItemClick(TvRecyclerView parent, View itemView, int position) {
-                handleEpgItemClick(position);
+                Epginfo item = epgListAdapter.getItem(position);
+                int dateIndex = epgDateAdapter.getSelectedIndex();
+                if (channelListPanel != null) {
+                    channelListPanel.notifyEpgClicked(item, dateIndex);
+                } else {
+                    handleEpgItemClick(position);
+                }
             }
         };
         mEpgInfoGridView.setOnItemListener(listener);
         epgListAdapter.setOnItemClickListener((adapter, view, position) -> {
             FastClickCheckUtil.check(view);
-            handleEpgItemClick(position);
+            Epginfo item = epgListAdapter.getItem(position);
+            int dateIndex = epgDateAdapter.getSelectedIndex();
+            if (channelListPanel != null) {
+                channelListPanel.notifyEpgClicked(item, dateIndex);
+            } else {
+                handleEpgItemClick(position);
+            }
         });
     }
 
     private void handleEpgItemClick(int position) {
         if (currentLiveChannelItem == null) return;
-        Date date = epgDateAdapter.getSelectedIndex() < 0 ? new Date() :
-                epgDateAdapter.getData().get(epgDateAdapter.getSelectedIndex()).getDateParamVal();
+        Date date = epgDateAdapter.getSelectedIndex() < 0 ? new Date() : epgDateAdapter.getData().get(epgDateAdapter.getSelectedIndex()).getDateParamVal();
         SimpleDateFormat dateFormat = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD);
         dateFormat.setTimeZone(TimeZone.getTimeZone("GMT+8:00"));
         Epginfo selectedData = epgListAdapter.getItem(position);
@@ -882,8 +914,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             shiyi_time = shiyiStartdate + "-" + shiyiEnddate;
             isShiyiMode = true;
             String[] shiyiUrls = buildShiyiUrls(currentLiveChannelItem.getUrl(), shiyi_time);
-            String primaryUrl = shiyiUrls[0];
-            mVideoView.setUrl(primaryUrl, setPlayHeaders(primaryUrl));
+            mVideoView.setUrl(shiyiUrls[0], setPlayHeaders(shiyiUrls[0]));
             mVideoView.start();
             epgListAdapter.setShiyiSelection(position, true, timeFormat.format(date));
         }
@@ -1147,14 +1178,11 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                     }
                 }
                 final String currentName = currentLiveChannelItem.getChannelName();
-                mHandler.postDelayed(() -> {
-                    epgCacheHelper.preloadOtherChannels(allChannelNames, currentName);
-                }, LiveConstants.PRELOAD_DELAY_MS);
+                mHandler.postDelayed(() -> epgCacheHelper.preloadOtherChannels(allChannelNames, currentName), LiveConstants.PRELOAD_DELAY_MS);
             }
         }
     }
 
-    // ==================== 辅助方法 ====================
     private Integer[] getNextChannel(int direction) {
         if (liveChannelGroupList.isEmpty() || currentLiveChannelItem == null) return new Integer[]{0, -1};
         int channelGroupIndex = currentChannelGroupIndex;
@@ -1212,10 +1240,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         if (channelListPanel != null) {
             channelListPanel.loadGroup(groupIndex, liveChannelGroupList);
         }
-        // 关键：点击当前组只刷新列表，不重新播放
-        if (groupIndex == currentChannelGroupIndex) {
-            return;
-        }
+        if (groupIndex == currentChannelGroupIndex) return;
         List<LiveChannelItem> channels = getLiveChannels(groupIndex);
         if (!channels.isEmpty()) {
             playChannel(groupIndex, 0, false);
@@ -1291,7 +1316,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         }
     }
 
-    // ==================== 生命周期其他方法 ====================
     @Override
     public void onUserLeaveHint() {
         if (supportsPiPMode() && PiPON) {
