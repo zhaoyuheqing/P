@@ -26,11 +26,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 左侧频道列表面板 - 最终完整版（已完全还原原脚本记忆与高亮机制）
- * 关键修复：
- * - 每次 show() 都无条件强制从 Activity 读取 current* 索引并高亮
- * - focusCurrentChannelRunnable 采用持续 retry 机制（完全模拟原 mFocusCurrentChannelAndShowChannelList）
- * - 已显示时再次唤出也会重新强制高亮当前直播节目
+ * 左侧频道列表面板 - 最终修复版（已完全还原原脚本记忆与高亮机制）
+ * 关键：每次 show() 都强制从 Activity 拉取当前直播索引并高亮
  */
 public class LiveChannelListPanel {
 
@@ -71,16 +68,21 @@ public class LiveChannelListPanel {
 
     private final Runnable hideRunnable = this::hideInternal;
 
-    // ==================== 关键修复：强制高亮 Runnable ====================
     private final Runnable focusCurrentChannelRunnable = new Runnable() {
         private int retryCount = 0;
-        private static final int MAX_RETRY = 10;
+        private static final int MAX_RETRY = 12;
 
         @Override
         public void run() {
             TvRecyclerView groupView = groupViewRef.get();
             TvRecyclerView channelView = channelViewRef.get();
             if (groupView == null || channelView == null || groupAdapter == null || channelAdapter == null) return;
+
+            // 每次 retry 前都强制同步 Activity 当前直播索引（核心修复）
+            if (listener != null) {
+                currentGroupIndex = listener.getCurrentGroupIndex();
+                currentChannelIndex = listener.getCurrentChannelIndex();
+            }
 
             if (groupView.isScrolling() || channelView.isScrolling() ||
                     groupView.isComputingLayout() || channelView.isComputingLayout()) {
@@ -90,7 +92,6 @@ public class LiveChannelListPanel {
                 return;
             }
 
-            // 每次都强制从 Activity 最新索引高亮
             groupAdapter.setSelectedGroupIndex(currentGroupIndex);
             channelAdapter.setSelectedChannelIndex(currentChannelIndex);
 
@@ -108,7 +109,6 @@ public class LiveChannelListPanel {
                 }
             }
 
-            // 继续 retry
             if (retryCount++ < MAX_RETRY) {
                 handler.postDelayed(this, 100);
             }
@@ -189,12 +189,8 @@ public class LiveChannelListPanel {
     }
 
     public void loadGroup(int groupIndex, List<LiveChannelGroup> allGroups) {
-        if (isEpgMode) {
-            showChannelMode();
-        }
-        if (groupAdapter != null) {
-            groupAdapter.setSelectedGroupIndex(groupIndex);
-        }
+        if (isEpgMode) showChannelMode();
+        if (groupAdapter != null) groupAdapter.setSelectedGroupIndex(groupIndex);
         List<LiveChannelItem> channels = null;
         if (groupIndex >= 0 && allGroups != null && groupIndex < allGroups.size()) {
             channels = allGroups.get(groupIndex).getLiveChannels();
@@ -232,10 +228,9 @@ public class LiveChannelListPanel {
         if (listener != null) listener.onShiyiPlaybackStarted();
     }
 
-    // ==================== 关键修复：show() 方法 ====================
     public void show() {
+        // 每次唤出都强制同步 Activity 当前直播索引（核心修复）
         if (listener != null) {
-            // 每次唤出都强制从 Activity 同步最新当前直播索引
             syncHighlightFromActivity(listener.getCurrentGroupIndex(), listener.getCurrentChannelIndex());
         }
 
@@ -260,9 +255,9 @@ public class LiveChannelListPanel {
 
         isShowing = true;
 
-        // 每次 show 都无条件执行高亮（即使列表已经显示）
+        // 强制执行高亮（即使已显示）
         handler.removeCallbacks(focusCurrentChannelRunnable);
-        handler.postDelayed(focusCurrentChannelRunnable, 220);
+        handler.postDelayed(focusCurrentChannelRunnable, 180);
 
         handler.removeCallbacks(hideRunnable);
         handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
@@ -304,14 +299,11 @@ public class LiveChannelListPanel {
         groupAdapter = new LiveChannelGroupAdapter();
         groupView.setAdapter(groupAdapter);
         groupView.setOnItemListener(new TvRecyclerView.OnItemListener() {
-            @Override
-            public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {}
-            @Override
-            public void onItemSelected(TvRecyclerView parent, View itemView, int position) {
+            @Override public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {}
+            @Override public void onItemSelected(TvRecyclerView parent, View itemView, int position) {
                 if (groupAdapter != null) groupAdapter.setFocusedGroupIndex(position);
             }
-            @Override
-            public void onItemClick(TvRecyclerView parent, View itemView, int position) {
+            @Override public void onItemClick(TvRecyclerView parent, View itemView, int position) {
                 FastClickCheckUtil.check(itemView);
                 if (listener != null) listener.onGroupSelected(position);
             }
@@ -330,18 +322,15 @@ public class LiveChannelListPanel {
         channelAdapter = new LiveChannelItemAdapter();
         channelView.setAdapter(channelAdapter);
         channelView.setOnItemListener(new TvRecyclerView.OnItemListener() {
-            @Override
-            public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {}
-            @Override
-            public void onItemSelected(TvRecyclerView parent, View itemView, int position) {
+            @Override public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {}
+            @Override public void onItemSelected(TvRecyclerView parent, View itemView, int position) {
                 if (position < 0) return;
                 if (groupAdapter != null) groupAdapter.setFocusedGroupIndex(-1);
                 if (channelAdapter != null) channelAdapter.setFocusedChannelIndex(position);
                 handler.removeCallbacks(hideRunnable);
                 handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_CHANNEL_LIST_MS);
             }
-            @Override
-            public void onItemClick(TvRecyclerView parent, View itemView, int position) {
+            @Override public void onItemClick(TvRecyclerView parent, View itemView, int position) {
                 clickChannel(position);
             }
         });
