@@ -91,6 +91,7 @@ import xyz.doikki.videoplayer.util.PlayerUtils;
  * - 回放分支净化，不干扰播放
  * - 密码分组自动播放第一个频道
  * - 所有高亮逻辑由 Panel 统一管理
+ * - 编译错误修复：删除多余的 channelListPanel.requestLayout() 调用
  */
 public class LivePlayActivity extends BaseActivity {
 
@@ -167,7 +168,7 @@ public class LivePlayActivity extends BaseActivity {
         if (mGroupEPG != null) mGroupEPG.requestLayout();
         if (mEpgDateGridView != null) mEpgDateGridView.requestLayout();
         if (mEpgInfoGridView != null) mEpgInfoGridView.requestLayout();
-        if (channelListPanel != null) channelListPanel.requestLayout();
+        // 注意：左侧列表的布局刷新由 Panel 内部动画和滚动自动处理，无需额外调用
     };
 
     private final Runnable mUpdateTimeRun = new Runnable() {
@@ -727,7 +728,6 @@ public class LivePlayActivity extends BaseActivity {
         } else if (settingsPanel != null && settingsPanel.isShowing()) {
             settingsPanel.hide();
         } else if (channelListPanel != null) {
-            // 关键：每次唤出都强制同步当前直播索引
             channelListPanel.syncHighlightFromActivity(currentChannelGroupIndex, currentLiveChannelIndex);
             channelListPanel.show();
             mHandler.post(tv_sys_timeRunnable);
@@ -764,7 +764,6 @@ public class LivePlayActivity extends BaseActivity {
                     .translationY(0).setListener(null);
         }
 
-        // 原脚本：showChannelInfo 只显示底部栏，不刷新 EPG
         mHandler.removeCallbacks(mHideChannelInfoRun);
         mHandler.postDelayed(mHideChannelInfoRun, LiveConstants.AUTO_HIDE_CHANNEL_INFO_MS);
         mHandler.postDelayed(mUpdateLayout, 300);
@@ -892,7 +891,6 @@ public class LivePlayActivity extends BaseActivity {
                 settingsPanel.setCurrentSourceIndex(currentLiveChannelItem.getSourceIndex());
             }
 
-            // 同步左侧列表高亮并强制刷新
             if (channelListPanel != null) {
                 channelListPanel.updateSelectionAndScroll(currentChannelGroupIndex, currentLiveChannelIndex);
                 channelListPanel.syncHighlightFromActivity(currentChannelGroupIndex, currentLiveChannelIndex);
