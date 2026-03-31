@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.owen.tvrecyclerview.widget.TvRecyclerView;
 import com.owen.tvrecyclerview.widget.V7LinearLayoutManager;
 
+import com.github.tvbox.osc.bean.Epginfo;
 import com.github.tvbox.osc.bean.LiveChannelGroup;
 import com.github.tvbox.osc.bean.LiveChannelItem;
 import com.github.tvbox.osc.constant.LiveConstants;
@@ -25,15 +26,13 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * LiveChannelListPanel - 最终纯UI版（已按最新判断优化）
- */
 public class LiveChannelListPanel {
 
     public interface ChannelListListener {
         void onGroupSelected(int groupIndex);
         void onChannelSelected(int groupIndex, int channelIndex);
         void onEpgModeChanged(boolean isEpg);
+        void onEpgItemClicked(Epginfo epgItem, int selectedDateIndex);
 
         List<LiveChannelGroup> getChannelGroups();
         List<LiveChannelItem> getLiveChannels(int groupIndex);
@@ -122,7 +121,6 @@ public class LiveChannelListPanel {
                                 @NonNull TvRecyclerView channelView, @NonNull LinearLayout groupEpg,
                                 @NonNull LinearLayout divLeft, @NonNull LinearLayout divRight,
                                 @NonNull TvRecyclerView epgDate, @NonNull TvRecyclerView epgInfo) {
-
         this.contextRef = new WeakReference<>(context);
         this.handler = handler;
         this.rootViewRef = new WeakReference<>(rootView);
@@ -133,7 +131,6 @@ public class LiveChannelListPanel {
         this.divRightRef = new WeakReference<>(divRight);
         this.epgDateViewRef = new WeakReference<>(epgDate);
         this.epgInfoViewRef = new WeakReference<>(epgInfo);
-
         rootView.setVisibility(View.INVISIBLE);
     }
 
@@ -178,7 +175,6 @@ public class LiveChannelListPanel {
         if (isEpgMode) showChannelMode();
         if (groupAdapter != null) groupAdapter.setSelectedGroupIndex(groupIndex);
 
-        // 优化：点击当前组时保持原有选中频道，避免闪烁
         int targetIndex = (groupIndex == listener.getCurrentGroupIndex())
                 ? listener.getCurrentChannelIndex() : 0;
 
@@ -188,6 +184,10 @@ public class LiveChannelListPanel {
             channelAdapter.setSelectedChannelIndex(targetIndex);
         }
         syncHighlightFromActivity(groupIndex, targetIndex);
+    }
+
+    public void notifyEpgClicked(Epginfo item, int dateIndex) {
+        if (listener != null) listener.onEpgItemClicked(item, dateIndex);
     }
 
     public void showEpgMode() {
@@ -218,11 +218,8 @@ public class LiveChannelListPanel {
         LinearLayout rootView = rootViewRef.get();
         if (rootView == null) return;
 
-        if (isEpgMode) {
-            showEpgMode();
-        } else {
-            showChannelMode();
-        }
+        if (isEpgMode) showEpgMode();
+        else showChannelMode();
 
         if (rootView.getVisibility() != View.VISIBLE) {
             rootView.setVisibility(View.VISIBLE);
