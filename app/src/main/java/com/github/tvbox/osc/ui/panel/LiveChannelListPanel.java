@@ -27,8 +27,6 @@ import java.util.List;
 
 /**
  * LiveChannelListPanel - 最终纯UI版（已按最新判断优化）
- * - focus 带重试机制
- * - 只负责 UI，不保存状态
  */
 public class LiveChannelListPanel {
 
@@ -179,12 +177,17 @@ public class LiveChannelListPanel {
     public void loadGroup(int groupIndex, List<LiveChannelGroup> allGroups) {
         if (isEpgMode) showChannelMode();
         if (groupAdapter != null) groupAdapter.setSelectedGroupIndex(groupIndex);
+
+        // 优化：点击当前组时保持原有选中频道，避免闪烁
+        int targetIndex = (groupIndex == listener.getCurrentGroupIndex())
+                ? listener.getCurrentChannelIndex() : 0;
+
         List<LiveChannelItem> channels = listener != null ? listener.getLiveChannels(groupIndex) : new ArrayList<>();
         if (channelAdapter != null) {
             channelAdapter.setNewData(channels);
-            channelAdapter.setSelectedChannelIndex(0);
+            channelAdapter.setSelectedChannelIndex(targetIndex);
         }
-        syncHighlightFromActivity(groupIndex, 0);
+        syncHighlightFromActivity(groupIndex, targetIndex);
     }
 
     public void showEpgMode() {
