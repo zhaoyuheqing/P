@@ -1,4 +1,3 @@
-这是脚本的原始脚本
 package com.github.tvbox.osc.ui.activity;
 
 import static xyz.doikki.videoplayer.util.PlayerUtils.stringForTimeVod;
