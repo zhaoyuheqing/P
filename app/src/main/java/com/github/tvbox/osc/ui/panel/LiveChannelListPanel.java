@@ -127,15 +127,6 @@ public class LiveChannelListPanel {
 
             if (epgInfo.getVisibility() == View.VISIBLE) {
                 epgInfo.requestFocus();
-                // 尝试恢复上次选中的节目位置（如果适配器是 LiveEpgAdapter）
-                RecyclerView.Adapter<?> adapter = epgInfo.getAdapter();
-                if (adapter instanceof LiveEpgAdapter) {
-                    int pos = ((LiveEpgAdapter) adapter).getSelectedEpgIndex();
-                    if (pos >= 0) {
-                        epgInfo.scrollToPosition(pos);
-                        epgInfo.setSelection(pos);
-                    }
-                }
                 retryCount = 0;
             } else {
                 TvRecyclerView epgDate = epgDateViewRef.get();
@@ -393,7 +384,6 @@ public class LiveChannelListPanel {
         int groupIndex = listener.getCurrentGroupIndex();
         if (groupIndex < 0) return;
         listener.onChannelSelected(groupIndex, position);
-        // 点击后立即隐藏面板（与原脚本行为一致）
         hide();
     }
 
