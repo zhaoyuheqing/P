@@ -18,9 +18,9 @@ import com.github.tvbox.osc.bean.Epginfo;
 import com.github.tvbox.osc.bean.LiveChannelGroup;
 import com.github.tvbox.osc.bean.LiveChannelItem;
 import com.github.tvbox.osc.constant.LiveConstants;
-import com.github.tvbox.osc.ui.activity.LivePlayActivity;
 import com.github.tvbox.osc.ui.adapter.LiveChannelGroupAdapter;
 import com.github.tvbox.osc.ui.adapter.LiveChannelItemAdapter;
+import com.github.tvbox.osc.ui.adapter.LiveEpgAdapter;
 import com.github.tvbox.osc.util.FastClickCheckUtil;
 
 import java.lang.ref.WeakReference;
@@ -33,7 +33,7 @@ public class LiveChannelListPanel {
         void onGroupSelected(int groupIndex);
         void onChannelSelected(int groupIndex, int channelIndex);
         void onEpgModeChanged(boolean isEpg);
-        void onEpgItemClicked(Epginfo epgItem, int selectedDateIndex);
+        void onEpgItemClicked(Epginfo epgItem, int position, int selectedDateIndex);
 
         List<LiveChannelGroup> getChannelGroups();
         List<LiveChannelItem> getLiveChannels(int groupIndex);
@@ -127,9 +127,10 @@ public class LiveChannelListPanel {
 
             if (epgInfo.getVisibility() == View.VISIBLE) {
                 epgInfo.requestFocus();
-                // 恢复上次选中的节目位置（如果有）
-                if (epgInfo.getAdapter() != null && epgInfo.getAdapter() instanceof LiveEpgAdapter) {
-                    int pos = ((LiveEpgAdapter) epgInfo.getAdapter()).getSelectedEpgIndex();
+                // 尝试恢复上次选中的节目位置（如果适配器是 LiveEpgAdapter）
+                RecyclerView.Adapter<?> adapter = epgInfo.getAdapter();
+                if (adapter instanceof LiveEpgAdapter) {
+                    int pos = ((LiveEpgAdapter) adapter).getSelectedEpgIndex();
                     if (pos >= 0) {
                         epgInfo.scrollToPosition(pos);
                         epgInfo.setSelection(pos);
@@ -188,7 +189,6 @@ public class LiveChannelListPanel {
         }
     }
 
-    // 仅更新选中索引，不刷新全量数据（性能优化）
     public void updateCurrentSelection(int groupIndex, int channelIndex) {
         if (groupAdapter != null) {
             groupAdapter.setSelectedGroupIndex(groupIndex);
@@ -221,10 +221,10 @@ public class LiveChannelListPanel {
     }
 
     // ---------- EPG 回调 ----------
-    public void notifyEpgClicked(Epginfo item, int dateIndex) {
+    public void notifyEpgClicked(Epginfo item, int position, int dateIndex) {
         resetHideTimer();
         if (listener != null) {
-            listener.onEpgItemClicked(item, dateIndex);
+            listener.onEpgItemClicked(item, position, dateIndex);
         }
     }
 
@@ -245,15 +245,12 @@ public class LiveChannelListPanel {
             setChannelViewsVisible(true);
             if (listener != null) {
                 listener.onEpgModeChanged(false);
-                // 刷新列表数据
                 refreshFull(listener.getChannelGroups(), listener.getCurrentGroupIndex(), listener.getCurrentChannelIndex());
             }
         } else {
-            // 已经是频道模式，确保视图正确
             setEpgViewsVisible(false);
             setChannelViewsVisible(true);
             if (listener != null) {
-                // 仅同步选中状态，不刷新全量数据（避免闪烁）
                 updateCurrentSelection(listener.getCurrentGroupIndex(), listener.getCurrentChannelIndex());
             }
         }
@@ -290,7 +287,6 @@ public class LiveChannelListPanel {
                         }
                     });
         } else {
-            // 面板已显示，仅刷新焦点
             handler.removeCallbacks(focusCurrentChannelRunnable);
             handler.removeCallbacks(focusEpgRunnable);
             if (isEpgMode) {
@@ -392,7 +388,7 @@ public class LiveChannelListPanel {
     }
 
     private void clickChannel(int position) {
-        resetHideTimer(); // 只重置计时器，不立即隐藏
+        resetHideTimer();
         if (listener == null) return;
         int groupIndex = listener.getCurrentGroupIndex();
         if (groupIndex < 0) return;
