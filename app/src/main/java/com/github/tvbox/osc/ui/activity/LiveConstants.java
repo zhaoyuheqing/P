@@ -37,6 +37,7 @@ public class LiveConstants {
 
     // 日期时间格式
     public static final String DATE_FORMAT_YMD = "yyyy-MM-dd";
+    public static final String DATE_FORMAT_YMD_NUM = "yyyyMMdd";   // 时移专用
     public static final String DATE_FORMAT_YMDHMS = "yyyyMMddHHmmss";
     public static final String TIME_FORMAT_HHMM = "HH:mm";
     public static final String TIME_FORMAT_HHMMSS = "HH:mm:ss";
