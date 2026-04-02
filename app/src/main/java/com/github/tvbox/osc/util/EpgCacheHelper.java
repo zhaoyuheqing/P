@@ -54,6 +54,16 @@ public class EpgCacheHelper {
     
     // ========== HTTP客户端 ==========
     private OkHttpClient httpClient;
+
+    // ========== Logo回调接口（修复错误1） ==========
+    public interface LogoCallback {
+        void onLogoLoaded(String channelName, String logoUrl);
+    }
+    private LogoCallback logoCallback;
+    
+    public void setLogoCallback(LogoCallback callback) {
+        this.logoCallback = callback;
+    }
     
     public EpgCacheHelper(Context context, String epgBaseUrl) {
         this.context = context;
@@ -124,7 +134,7 @@ public class EpgCacheHelper {
     }
     
     /**
-     * 预加载当前频道的所有日期
+     * 预加载当前频道的所有日期（修复错误2：添加缓存检查）
      */
     public void preloadCurrentChannel(String channelName) {
         if (channelName == null) return;
@@ -132,6 +142,10 @@ public class EpgCacheHelper {
         List<String> dates = getPreloadDates();
         highPriorityExecutor.execute(() -> {
             for (String dateStr : dates) {
+                // 修复：检查缓存，有效则跳过
+                if (getCachedEpg(channelName, dateStr) != null) {
+                    continue;
+                }
                 String taskKey = channelName + "_" + dateStr;
                 synchronized (pendingRequests) {
                     if (pendingRequests.contains(taskKey)) continue;
@@ -268,6 +282,13 @@ public class EpgCacheHelper {
                 epg.originEnd = epgObj.optString("originEnd", LiveConstants.DEFAULT_END_TIME);
                 epgList.add(epg);
             }
+            
+            // 修复错误1：读取并回调 logoUrl
+            String logoUrl = cacheData.optString("logoUrl", null);
+            if (logoUrl != null && !logoUrl.isEmpty() && logoCallback != null) {
+                mainHandler.post(() -> logoCallback.onLogoLoaded(channelName, logoUrl));
+            }
+            
             return epgList;
         } catch (Exception e) {
             cacheFile.delete();
