@@ -351,6 +351,16 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         });
     }
 
+    // 封装时间更新启停（可选但推荐）
+    private void startSysTimeUpdate() {
+        mHandler.removeCallbacks(tv_sys_timeRunnable);
+        mHandler.post(tv_sys_timeRunnable);
+    }
+
+    private void stopSysTimeUpdate() {
+        mHandler.removeCallbacks(tv_sys_timeRunnable);
+    }
+
     // ========== 生命周期 ==========
     @Override
     protected int getLayoutResID() {
@@ -581,6 +591,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             getEpg(epgDateAdapter.getData().get(6).getDateParamVal());
         } else if (!isEpg) {
             resetShiyiMode();
+            showBottomEpg();  // 修复：切换回频道模式时刷新底部信息
         }
     }
 
@@ -606,6 +617,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             mVideoView.setUrl(currentLiveChannelItem.getUrl(), setPlayHeaders(currentLiveChannelItem.getUrl()));
             mVideoView.start();
             epgListAdapter.setShiyiSelection(-1, false, timeFormat.format(date));
+            showChannelInfo();  // 修复：直播播放后刷新底部信息
         } else {
             if (!isValidShiyiTime(shiyiStartdate, shiyiEnddate)) {
                 Toast.makeText(this, "无效的回放时间", Toast.LENGTH_SHORT).show();
@@ -627,7 +639,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
     @Override
     public void onPanelHidden() {
         // 面板隐藏时停止系统时间更新
-        mHandler.removeCallbacks(tv_sys_timeRunnable);
+        stopSysTimeUpdate();
     }
 
     // ========== UI 显示 ==========
@@ -645,9 +657,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                 return;
             }
             channelListPanel.show();
-            // 启动时间更新：先移除再 post
-            mHandler.removeCallbacks(tv_sys_timeRunnable);
-            mHandler.post(tv_sys_timeRunnable);
+            startSysTimeUpdate();  // 先移除再启动
             mHandler.postDelayed(mUpdateLayout, 255);
         }
     }
@@ -663,8 +673,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                 // 停止时间更新已在 onPanelHidden 中处理
             } else {
                 channelListPanel.show();
-                mHandler.removeCallbacks(tv_sys_timeRunnable);
-                mHandler.post(tv_sys_timeRunnable);
+                startSysTimeUpdate();
             }
         }
         mHandler.postDelayed(mUpdateLayout, 255);
@@ -677,8 +686,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                 channelListPanel.hide();
             } else {
                 channelListPanel.show();
-                mHandler.removeCallbacks(tv_sys_timeRunnable);
-                mHandler.post(tv_sys_timeRunnable);
+                startSysTimeUpdate();
             }
         }
         mHandler.postDelayed(mUpdateLayout, 255);
@@ -842,7 +850,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             }
         }
         currentLiveChannelItem.setinclude_back(currentLiveChannelItem.getUrl().indexOf(LiveConstants.PLTV_FLAG + "8888") != -1);
-        mHandler.post(tv_sys_timeRunnable);
+        startSysTimeUpdate();  // 先移除再启动
         tv_channelname.setText(currentLiveChannelItem.getChannelName());
         tv_channelnum.setText("" + currentLiveChannelItem.getChannelNum());
         tv_source.setText(currentLiveChannelItem.getSourceNum() <= 0 ? "1/1" : "线路 " + (currentLiveChannelItem.getSourceIndex() + 1) + "/" + currentLiveChannelItem.getSourceNum());
@@ -871,7 +879,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         HawkUtils.setLastLiveChannelGroup(liveChannelGroupList.get(currentChannelGroupIndex).getGroupName());
         livePlayerManager.getLiveChannelPlayer(mVideoView, currentLiveChannelItem.getChannelName());
         currentLiveChannelItem.setinclude_back(currentLiveChannelItem.getUrl().indexOf(LiveConstants.PLTV_FLAG + "8888") != -1);
-        mHandler.post(tv_sys_timeRunnable);
+        startSysTimeUpdate();
         tv_channelname.setText(currentLiveChannelItem.getChannelName());
         tv_channelnum.setText("" + currentLiveChannelItem.getChannelNum());
         tv_source.setText(currentLiveChannelItem.getSourceNum() <= 0 ? "1/1" : "线路 " + (currentLiveChannelItem.getSourceIndex() + 1) + "/" + currentLiveChannelItem.getSourceNum());
@@ -1379,7 +1387,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             mHandler.removeCallbacks(mConnectTimeoutChangeSourceRun);
             mHandler.removeCallbacks(mUpdateNetSpeedRun);
             mHandler.removeCallbacks(mUpdateTimeRun);
-            mHandler.removeCallbacks(tv_sys_timeRunnable);
+            stopSysTimeUpdate();
             exit();
         }
     }
