@@ -643,28 +643,32 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         }
     }
 
-    // 修改 divLoadEpgR：始终切换到 EPG 模式，确保面板显示
+    // 修正 divLoadEpgR 符合原始行为
     public void divLoadEpgR(View view) {
         if (settingsPanel != null && settingsPanel.isShowing()) settingsPanel.hide();
         if (channelListPanel != null) {
-            channelListPanel.showEpgMode();           // 切换模式
-            if (!channelListPanel.isShowing()) {
-                channelListPanel.show();              // 未显示则显示
+            if (channelListPanel.isShowing() && channelListPanel.isEpgMode()) {
+                channelListPanel.hide();
             } else {
-                channelListPanel.resetHideTimer();    // 已显示则重置计时器
+                channelListPanel.showEpgMode();
+                if (!channelListPanel.isShowing()) {
+                    channelListPanel.show();
+                }
             }
         }
         mHandler.postDelayed(mUpdateLayout, 255);
     }
 
-    // 修改 divLoadEpgL：始终切换到频道模式，确保面板显示
+    // 修正 divLoadEpgL 符合原始行为
     public void divLoadEpgL(View view) {
         if (channelListPanel != null) {
-            channelListPanel.showChannelMode();       // 切换模式
-            if (!channelListPanel.isShowing()) {
-                channelListPanel.show();              // 未显示则显示
+            if (channelListPanel.isShowing() && !channelListPanel.isEpgMode()) {
+                channelListPanel.hide();
             } else {
-                channelListPanel.resetHideTimer();    // 已显示则重置计时器
+                channelListPanel.showChannelMode();
+                if (!channelListPanel.isShowing()) {
+                    channelListPanel.show();
+                }
             }
         }
         mHandler.postDelayed(mUpdateLayout, 255);
@@ -899,7 +903,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
     }
 
     public void playPreSource() {
-        // 显式重置时移模式（增强健壮性）
         isShiyiMode = false;
         shiyi_time = null;
         if (!isCurrentLiveChannelValid()) {
