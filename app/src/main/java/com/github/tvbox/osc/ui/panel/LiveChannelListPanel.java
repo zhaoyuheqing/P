@@ -39,6 +39,7 @@ public class LiveChannelListPanel {
         int getCurrentChannelIndex();
         void updateCurrentChannel(int groupIndex, int channelIndex);
         boolean isNeedInputPassword(int groupIndex);
+        void onPanelHidden(); // 面板隐藏时的回调
     }
 
     private final WeakReference<Context> contextRef;
@@ -109,18 +110,26 @@ public class LiveChannelListPanel {
         @Override
         public void run() {
             TvRecyclerView epgInfo = epgInfoViewRef.get();
-            if (epgInfo == null) return;
-            if (epgInfo.getVisibility() == View.VISIBLE) {
-                epgInfo.requestFocus();
-                retryCount = 0;
-            } else {
-                TvRecyclerView epgDate = epgDateViewRef.get();
-                if (epgDate != null && epgDate.getVisibility() == View.VISIBLE) {
-                    epgDate.requestFocus();
-                    retryCount = 0;
-                } else if (retryCount++ < MAX_RETRY) {
-                    handler.postDelayed(this, 100);
+            TvRecyclerView epgDate = epgDateViewRef.get();
+            if (epgInfo == null && epgDate == null) return;
+            boolean isEpgVisible = (epgInfo != null && epgInfo.getVisibility() == View.VISIBLE);
+            boolean isDateVisible = (epgDate != null && epgDate.getVisibility() == View.VISIBLE);
+            if (isEpgVisible || isDateVisible) {
+                if ((epgInfo != null && (epgInfo.isScrolling() || epgInfo.isComputingLayout())) ||
+                    (epgDate != null && (epgDate.isScrolling() || epgDate.isComputingLayout()))) {
+                    if (retryCount++ < MAX_RETRY) {
+                        handler.postDelayed(this, 100);
+                    }
+                    return;
                 }
+                if (isEpgVisible) {
+                    epgInfo.requestFocus();
+                } else {
+                    epgDate.requestFocus();
+                }
+                retryCount = 0;
+            } else if (retryCount++ < MAX_RETRY) {
+                handler.postDelayed(this, 100);
             }
         }
     };
@@ -165,6 +174,15 @@ public class LiveChannelListPanel {
         }
     }
 
+    // 仅刷新频道列表，不改变选中索引（用于密码对话框取消）
+    public void refreshChannelListOnly(int groupIndex) {
+        if (channelAdapter != null && listener != null) {
+            List<LiveChannelItem> channels = listener.getLiveChannels(groupIndex);
+            channelAdapter.setNewData(channels);
+            // 不调用 setSelectedChannelIndex，保持原选中状态
+        }
+    }
+
     public void updateCurrentSelection(int groupIndex, int channelIndex) {
         if (groupAdapter != null) {
             groupAdapter.setSelectedGroupIndex(groupIndex);
@@ -183,7 +201,6 @@ public class LiveChannelListPanel {
         }
     }
 
-    // 修正：点击分组时，若分组为当前播放分组则高亮当前频道，否则清除高亮
     public void loadGroup(int groupIndex, List<LiveChannelGroup> allGroups) {
         if (isEpgMode) showChannelMode();
         if (groupAdapter != null) groupAdapter.setSelectedGroupIndex(groupIndex);
@@ -216,11 +233,6 @@ public class LiveChannelListPanel {
         setChannelViewsVisible(false);
         if (listener != null) listener.onEpgModeChanged(true);
         resetHideTimer();
-        // 焦点恢复
-        TvRecyclerView epgInfo = epgInfoViewRef.get();
-        if (epgInfo != null && epgInfo.getVisibility() == View.VISIBLE) {
-            handler.postDelayed(() -> epgInfo.requestFocus(), 100);
-        }
     }
 
     public void showChannelMode() {
@@ -247,7 +259,6 @@ public class LiveChannelListPanel {
     }
 
     // ========== 显示/隐藏 ==========
-    // 显示时强制刷新全量数据，确保界面同步
     public void show() {
         LinearLayout rootView = rootViewRef.get();
         if (rootView == null) return;
@@ -409,6 +420,9 @@ public class LiveChannelListPanel {
                     public void onAnimationEnd(Animator animation) {
                         rootView.setVisibility(View.INVISIBLE);
                         isShowing = false;
+                        if (listener != null) {
+                            listener.onPanelHidden(); // 通知 Activity 面板已隐藏
+                        }
                     }
                 });
         handler.removeCallbacks(hideRunnable);
