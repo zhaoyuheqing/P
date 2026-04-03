@@ -6,7 +6,6 @@ import android.os.Looper;
 
 import com.github.tvbox.osc.bean.Epginfo;
 import com.github.tvbox.osc.constant.LiveConstants;
-import com.github.tvbox.osc.ui.activity.LivePlayActivity;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -56,22 +55,12 @@ public class EpgCacheHelper {
     // ========== HTTP客户端 ==========
     private OkHttpClient httpClient;
     
-    // ========== Logo回调接口 ==========
-    public interface LogoCallback {
-        void onLogoLoaded(String channelName, String logoUrl);
-    }
-    private LogoCallback logoCallback;
-    
     public EpgCacheHelper(Context context, String epgBaseUrl) {
         this.context = context;
         this.mainHandler = new Handler(Looper.getMainLooper());
         this.epgBaseUrl = epgBaseUrl;
         this.highPriorityExecutor = Executors.newFixedThreadPool(LiveConstants.HIGH_PRIORITY_THREADS);
         this.lowPriorityExecutor = Executors.newFixedThreadPool(LiveConstants.LOW_PRIORITY_THREADS);
-    }
-    
-    public void setLogoCallback(LogoCallback callback) {
-        this.logoCallback = callback;
     }
     
     // ========== 公开方法 ==========
@@ -135,7 +124,7 @@ public class EpgCacheHelper {
     }
     
     /**
-     * 预加载当前频道的所有日期（增加缓存检查，避免重复请求）
+     * 预加载当前频道的所有日期
      */
     public void preloadCurrentChannel(String channelName) {
         if (channelName == null) return;
@@ -143,11 +132,6 @@ public class EpgCacheHelper {
         List<String> dates = getPreloadDates();
         highPriorityExecutor.execute(() -> {
             for (String dateStr : dates) {
-                // 修复错误2：先检查缓存是否已存在且有效，若有则跳过网络请求
-                if (getCachedEpg(channelName, dateStr) != null) {
-                    continue;
-                }
-                
                 String taskKey = channelName + "_" + dateStr;
                 synchronized (pendingRequests) {
                     if (pendingRequests.contains(taskKey)) continue;
@@ -271,13 +255,6 @@ public class EpgCacheHelper {
                 cacheFile.delete();
                 return null;
             }
-            
-            // 修复错误1：读取并回调 logoUrl
-            String logoUrl = cacheData.optString("logoUrl", null);
-            if (logoUrl != null && !logoUrl.isEmpty() && logoCallback != null) {
-                mainHandler.post(() -> logoCallback.onLogoLoaded(channelName, logoUrl));
-            }
-            
             JSONArray epgArray = cacheData.optJSONArray("epgList");
             if (epgArray == null || epgArray.length() == 0) return null;
             ArrayList<Epginfo> epgList = new ArrayList<>();
