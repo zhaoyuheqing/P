@@ -6,7 +6,6 @@ import android.os.Looper;
 
 import com.github.tvbox.osc.bean.Epginfo;
 import com.github.tvbox.osc.constant.LiveConstants;
-import com.github.tvbox.osc.ui.activity.LivePlayActivity;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -95,19 +94,28 @@ public class EpgCacheHelper {
         SimpleDateFormat sdf = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD);
         String dateStr = sdf.format(date);
         
+        // 1. 内存缓存
         ArrayList<Epginfo> cached = getFromMemoryCache(channelName, dateStr);
         if (cached != null && !cached.isEmpty()) {
-            mainHandler.post(() -> callback.onSuccess(channelName, date, cached));
+            final String finalChannelName = channelName;
+            final Date finalDate = date;
+            final ArrayList<Epginfo> finalCached = cached;
+            mainHandler.post(() -> callback.onSuccess(finalChannelName, finalDate, finalCached));
             return;
         }
         
+        // 2. 文件缓存
         cached = getFromFileCache(channelName, dateStr);
         if (cached != null && !cached.isEmpty()) {
             putToMemoryCache(channelName, dateStr, cached);
-            mainHandler.post(() -> callback.onSuccess(channelName, date, cached));
+            final String finalChannelName = channelName;
+            final Date finalDate = date;
+            final ArrayList<Epginfo> finalCached = cached;
+            mainHandler.post(() -> callback.onSuccess(finalChannelName, finalDate, finalCached));
             return;
         }
         
+        // 3. 网络请求
         final long requestId = currentChannelRequestId.incrementAndGet();
         final String reqChannelName = channelName;
         final Date reqDate = date;
@@ -117,7 +125,6 @@ public class EpgCacheHelper {
         });
     }
     
-    // 修复错误2：预加载时检查缓存
     public void preloadCurrentChannel(String channelName) {
         if (channelName == null) return;
         
@@ -125,7 +132,7 @@ public class EpgCacheHelper {
         highPriorityExecutor.execute(() -> {
             for (String dateStr : dates) {
                 if (getCachedEpg(channelName, dateStr) != null) {
-                    continue; // 已有有效缓存，跳过
+                    continue;
                 }
                 String taskKey = channelName + "_" + dateStr;
                 synchronized (pendingRequests) {
@@ -245,7 +252,6 @@ public class EpgCacheHelper {
                 return null;
             }
             
-            // 修复错误1：回调 logoUrl
             String logoUrl = cacheData.optString("logoUrl", null);
             if (logoUrl != null && !logoUrl.isEmpty() && logoCallback != null) {
                 mainHandler.post(() -> logoCallback.onLogoLoaded(channelName, logoUrl));
@@ -399,7 +405,10 @@ public class EpgCacheHelper {
                     if (!arrayList.isEmpty()) {
                         saveToFileCache(channelName, dateStr, arrayList, logoUrl);
                         if (callback != null && (requestId == 0 || requestId == currentChannelRequestId.get())) {
-                            mainHandler.post(() -> callback.onSuccess(channelName, date, arrayList));
+                            final String finalChannelName = channelName;
+                            final Date finalDate = date;
+                            final ArrayList<Epginfo> finalArrayList = arrayList;
+                            mainHandler.post(() -> callback.onSuccess(finalChannelName, finalDate, finalArrayList));
                         }
                     }
                 }
@@ -407,7 +416,10 @@ public class EpgCacheHelper {
         } catch (Exception e) {
             e.printStackTrace();
             if (callback != null) {
-                mainHandler.post(() -> callback.onFailure(channelName, date, e));
+                final String finalChannelName = channelName;
+                final Date finalDate = date;
+                final Exception finalException = e;
+                mainHandler.post(() -> callback.onFailure(finalChannelName, finalDate, finalException));
             }
         } finally {
             synchronized (pendingRequests) {
