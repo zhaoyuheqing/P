@@ -6,11 +6,11 @@ import android.view.MotionEvent;
 
 import androidx.annotation.NonNull;
 
+import com.github.tvbox.osc.api.ApiConfig;                     // 修正：原为 com.github.tvbox.osc.util.ApiConfig
 import com.github.tvbox.osc.bean.LiveChannelItem;
 import com.github.tvbox.osc.bean.LivePlayerManager;
 import com.github.tvbox.osc.constant.LiveConstants;
-import com.github.tvbox.osc.ui.controller.LiveController;
-import com.github.tvbox.osc.util.ApiConfig;
+import com.github.tvbox.osc.ui.controller.LiveController;       // 正确路径
 import com.github.tvbox.osc.util.HawkConfig;
 import com.orhanobut.hawk.Hawk;
 
@@ -352,11 +352,10 @@ public class LivePlaybackManager {
 
     // 画面比例和解码方式切换（可选实现）
     public void changeScale(int scaleIndex) {
-        // 如果 LivePlayerManager 有对应方法，可调用
-        // playerManager.changeLivePlayerScale(videoView, scaleIndex, currentChannel != null ? currentChannel.getChannelName() : "");
+        // 实现比例切换，如果有必要
     }
 
     public void changePlayerType(int typeIndex) {
-        // 同上
+        // 实现解码切换
     }
 }
