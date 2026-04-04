@@ -79,7 +79,6 @@ import java.util.Locale;
 import java.util.TimeZone;
 
 import kotlin.Pair;
-import okhttp3.Request;
 import xyz.doikki.videoplayer.player.VideoView;
 import xyz.doikki.videoplayer.util.PlayerUtils;
 
@@ -664,7 +663,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                 }
             }
         }
-        mHandler.postDelayed(mUpdateLayout, 255); // 修复错误6
+        mHandler.postDelayed(mUpdateLayout, 255);
     }
 
     public void divLoadEpgL(View view) {
@@ -679,7 +678,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                 }
             }
         }
-        mHandler.postDelayed(mUpdateLayout, 255); // 修复错误6
+        mHandler.postDelayed(mUpdateLayout, 255);
     }
 
     private void showSettingGroup() {
@@ -706,7 +705,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         }
         mHandler.removeCallbacks(mHideChannelInfoRun);
         mHandler.postDelayed(mHideChannelInfoRun, LiveConstants.AUTO_HIDE_CHANNEL_INFO_MS);
-        mHandler.postDelayed(mUpdateLayout, 255); // 修复错误6
+        mHandler.postDelayed(mUpdateLayout, 255);
     }
 
     private void toggleChannelInfo() {
@@ -716,7 +715,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             mBack.setVisibility(View.INVISIBLE);
             mHandler.removeCallbacks(mHideChannelInfoRun);
             mHandler.post(mHideChannelInfoRun);
-            mHandler.postDelayed(mUpdateLayout, 255); // 修复错误6
+            mHandler.postDelayed(mUpdateLayout, 255);
         }
     }
 
@@ -963,6 +962,16 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             }
         };
         mEpgInfoGridView.setOnItemListener(listener);
+        
+        // 修复：EPG 节目列表滚动重置计时器
+        mEpgInfoGridView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+                if (newState != RecyclerView.SCROLL_STATE_IDLE && channelListPanel != null) {
+                    channelListPanel.resetHideTimer();
+                }
+            }
+        });
     }
 
     private void initEpgDateView() {
@@ -1011,6 +1020,16 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             getEpg(epgDateAdapter.getData().get(position).getDateParamVal());
         });
         epgDateAdapter.setSelectedIndex(6);
+        
+        // 修复：EPG 日期列表滚动重置计时器
+        mEpgDateGridView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+                if (newState != RecyclerView.SCROLL_STATE_IDLE && channelListPanel != null) {
+                    channelListPanel.resetHideTimer();
+                }
+            }
+        });
     }
 
     private void initVideoView() {
@@ -1300,6 +1319,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             public void onCancel() {
                 if (channelListPanel != null) {
                     channelListPanel.refreshFull(liveChannelGroupList, currentChannelGroupIndex, currentLiveChannelIndex);
+                    channelListPanel.resetHideTimer();   // 修复：取消密码对话框时重置计时器
                 }
             }
         });
@@ -1483,7 +1503,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         if (epgCacheHelper != null) epgCacheHelper.destroy();
         if (settingsPanel != null) settingsPanel.destroy();
         if (channelListPanel != null) channelListPanel.destroy();
-        // 修复错误5：移除所有可能泄漏的 Runnable
+        // 修复：移除所有可能泄漏的 Runnable
         mHandler.removeCallbacks(tv_sys_timeRunnable);
         mHandler.removeCallbacks(mUpdateTimeRun);
         mHandler.removeCallbacks(mUpdateNetSpeedRun);
