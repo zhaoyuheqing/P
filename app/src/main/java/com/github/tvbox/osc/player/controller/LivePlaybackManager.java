@@ -100,6 +100,7 @@ public class LivePlaybackManager {
         playerManager.init(videoView);
     }
 
+    // ========== 播放状态处理 ==========
     private void handlePlayState(int playState) {
         if (currentChannel == null) return;
 
@@ -162,7 +163,7 @@ public class LivePlaybackManager {
     public void playChannel(LiveChannelItem channel, boolean isChangeSource) {
         if (channel == null) return;
         resetShiyiMode();
-        videoView.release();
+        if (videoView != null) videoView.release();
         currentChannel = channel;
         playerManager.getLiveChannelPlayer(videoView, channel.getChannelName());
 
@@ -182,7 +183,7 @@ public class LivePlaybackManager {
         if (listener != null) listener.onShiyiModeChanged(true, shiyiTimeRange);
 
         String[] urls = buildShiyiUrls(currentChannel.getUrl(), shiyiTimeRange);
-        videoView.release();
+        if (videoView != null) videoView.release();
         videoView.setUrl(urls[0], buildPlayHeaders(urls[0]));
         videoView.start();
     }
@@ -290,9 +291,7 @@ public class LivePlaybackManager {
 
     // ====================== 播放器查询与控制 ======================
     public void seekTo(int position) {
-        if (videoView != null) {
-            videoView.seekTo(position);
-        }
+        if (videoView != null) videoView.seekTo(position);
     }
 
     public long getCurrentPosition() {
@@ -341,11 +340,24 @@ public class LivePlaybackManager {
         return currentChannel;
     }
 
+    // ========== 设置功能（画面比例 / 解码方式）==========
+    /**
+     * 切换画面比例
+     * @param scaleIndex 比例索引（0:默认,1:16:9,2:4:3,3:填充,4:原始,5:裁剪）
+     */
     public void changeScale(int scaleIndex) {
-        // 如果 LivePlayerManager 支持比例切换，可在此实现
+        if (videoView != null && currentChannel != null) {
+            playerManager.changeLivePlayerScale(videoView, scaleIndex, currentChannel.getChannelName());
+        }
     }
 
+    /**
+     * 切换解码方式
+     * @param typeIndex 类型索引（0:系统,1:ijk硬解,2:ijk软解,3:exo）
+     */
     public void changePlayerType(int typeIndex) {
-        // 如果 LivePlayerManager 支持解码切换，可在此实现
+        if (videoView != null && currentChannel != null) {
+            playerManager.changeLivePlayerType(videoView, typeIndex, currentChannel.getChannelName());
+        }
     }
 }
