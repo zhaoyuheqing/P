@@ -100,7 +100,10 @@ public class LivePlaybackManager {
         videoView.setVideoController(controller);
         videoView.setProgressManager(null);
 
+        // 关键修复：恢复用户保存的缩放和解码偏好（与原脚本一致）
         playerManager.init(videoView);
+        this.currentScale = playerManager.getLivePlayerScale();
+        this.currentPlayerType = playerManager.getLivePlayerType();
     }
 
     private void handlePlayState(int playState) {
@@ -210,11 +213,7 @@ public class LivePlaybackManager {
         playChannel(currentChannel, true);
     }
 
-    public void replayChannel() {
-        if (currentChannel == null) return;
-        resetShiyiMode();
-        playChannel(currentChannel, false);
-    }
+    // 注意：replayChannel 已移至 Activity 中实现，此处不再保留方法
 
     public void resetShiyiMode() {
         isShiyiMode = false;
@@ -356,6 +355,7 @@ public class LivePlaybackManager {
         return currentPlayerType;
     }
 
+    // ========== 设置功能（画面比例 / 解码方式）==========
     public void changeScale(int scaleIndex) {
         if (videoView != null && currentChannel != null) {
             playerManager.changeLivePlayerScale(videoView, scaleIndex, currentChannel.getChannelName());
@@ -367,6 +367,7 @@ public class LivePlaybackManager {
         if (videoView == null || currentChannel == null) return;
         playerManager.changeLivePlayerType(videoView, typeIndex, currentChannel.getChannelName());
         this.currentPlayerType = typeIndex;
+        // 重新加载当前流使解码器生效
         String url = currentChannel.getUrl();
         videoView.release();
         videoView.setUrl(url, buildPlayHeaders(url));
