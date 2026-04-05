@@ -50,7 +50,8 @@ public class LivePlaybackManager {
         void onVideoSizeChanged(int width, int height);
         void onChannelInfoUpdate(LiveChannelItem channel);
         void onShiyiModeChanged(boolean isShiyi, String timeRange);
-        void onNeedShowBottomEpg();
+        void onNeedShowBottomEpg();           // 仅刷新底部节目信息
+        void onShowChannelInfo();             // 显示底部栏 + 重置自动隐藏（单源换源使用）
         void onAutoSwitchToNextChannel();
     }
 
@@ -163,11 +164,12 @@ public class LivePlaybackManager {
     public void playChannel(LiveChannelItem channel, boolean isChangeSource) {
         if (channel == null) return;
 
-        // 单源时只显示信息，不重新播放（与原脚本一致）
+        // 单源时：只显示底部栏 + 刷新信息，不重新加载流（与原脚本完全一致）
         if (isChangeSource && channel.getSourceNum() == 1) {
             if (listener != null) {
-                listener.onChannelInfoUpdate(channel);
-                listener.onNeedShowBottomEpg();
+                listener.onChannelInfoUpdate(channel);   // 更新频道名、线路号
+                listener.onShowChannelInfo();            // 显示底部栏并重置自动隐藏计时器
+                // 注意：不调用 onNeedShowBottomEpg()，因为底部栏已经由 onShowChannelInfo 显示了
             }
             return;
         }
@@ -179,7 +181,7 @@ public class LivePlaybackManager {
 
         if (listener != null) {
             listener.onChannelInfoUpdate(channel);
-            listener.onNeedShowBottomEpg();
+            listener.onNeedShowBottomEpg();   // 正常换源/换台时刷新底部节目信息（但不主动显示底部栏）
         }
 
         videoView.setUrl(channel.getUrl(), buildPlayHeaders(channel.getUrl()));
