@@ -226,6 +226,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
     public void getEpg(Date date) {
         if (currentLiveChannelItem == null || currentLiveChannelItem.getChannelName() == null) return;
         final String channelName = currentLiveChannelItem.getChannelName();
+        final Date requestDate = date;
         SimpleDateFormat sdf = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD);
         final String dateStr = sdf.format(date);
         ArrayList<Epginfo> cached = epgCacheHelper.getCachedEpg(channelName, dateStr);
@@ -237,13 +238,18 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         epgCacheHelper.requestEpg(channelName, date, new EpgCacheHelper.EpgCallback() {
             @Override
             public void onSuccess(String channelName, Date date, ArrayList<Epginfo> epgList) {
-                if (currentLiveChannelItem != null && channelName.equals(currentLiveChannelItem.getChannelName())) {
+                if (currentLiveChannelItem != null && channelName.equals(currentLiveChannelItem.getChannelName()) && date.equals(requestDate)) {
                     showEpg(date, epgList);
                     showBottomEpg();
                 }
             }
             @Override
-            public void onFailure(String channelName, Date date, Exception e) {}
+            public void onFailure(String channelName, Date date, Exception e) {
+                if (currentLiveChannelItem != null && channelName.equals(currentLiveChannelItem.getChannelName()) && date.equals(requestDate)) {
+                    showEpg(date, new ArrayList<>());
+                    showBottomEpg();
+                }
+            }
         });
     }
 
@@ -298,23 +304,19 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
 
             @Override
             public void onShiyiModeChanged(boolean isShiyi, String timeRange) {
-                // 时移模式变化时刷新底部信息（时移模式下底部信息应隐藏）
                 showBottomEpg();
-                // 刷新左侧 EPG 面板（确保回看/直播中/预约标签正确）
-                if (channelListPanel != null) {
-                    channelListPanel.refreshFull(liveChannelGroupList, currentChannelGroupIndex, currentLiveChannelIndex);
+                if (epgListAdapter != null) {
+                    epgListAdapter.notifyDataSetChanged();
                 }
             }
 
             @Override
             public void onNeedShowBottomEpg() {
-                // 正常播放时刷新底部节目信息（但不主动显示底部栏）
                 showBottomEpg();
             }
 
             @Override
             public void onShowChannelInfo() {
-                // 单源换源时显示底部栏（包含动画）并重置自动隐藏计时器
                 showChannelInfo();
             }
 
@@ -550,7 +552,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             }
             String shiyiRange = shiyiStartdate + "-" + shiyiEnddate;
             playbackManager.playShiyi(shiyiRange);
-            // 时移模式下立即刷新底部信息（隐藏）
             showBottomEpg();
             epgListAdapter.setShiyiSelection(position, true, timeFormat.format(date));
             epgListAdapter.notifyDataSetChanged();
@@ -678,25 +679,45 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
     }
 
     private void showBottomEpg() {
-        // 关键修复：完全依赖 Manager 的时移状态
+        // 时移模式下不显示底部节目信息
         if (playbackManager != null && playbackManager.isShiyiMode()) {
+            tv_curr_name.setText("时移回放中");
+            tv_next_name.setText("");
+            // 时移模式下也要清空左侧列表或保留现有数据
+            if (epgListAdapter != null) {
+                epgListAdapter.setNewData(new ArrayList<>());
+            }
             return;
         }
+
         if (currentLiveChannelItem == null || currentLiveChannelItem.getChannelName() == null) {
             tv_curr_name.setText(LiveConstants.NO_PROGRAM);
             tv_next_name.setText("");
+            if (epgListAdapter != null) {
+                epgListAdapter.setNewData(new ArrayList<>());
+            }
             return;
         }
+
         String channelName = currentLiveChannelItem.getChannelName();
         Date selectedDate = epgDateAdapter.getSelectedIndex() < 0 ? new Date() :
                 epgDateAdapter.getData().get(epgDateAdapter.getSelectedIndex()).getDateParamVal();
         String dateStr = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD).format(selectedDate);
         ArrayList<Epginfo> currentEpgData = epgCacheHelper.getCachedEpg(channelName, dateStr);
+
         if (currentEpgData != null && !currentEpgData.isEmpty()) {
             epgdata = currentEpgData;
-            String[] epgInfo = EpgUtil.getEpgInfo(channelName);
-            getTvLogo(channelName, epgInfo == null ? null : epgInfo[0]);
+
+            // ========== 关键修复：刷新左侧 EPG 列表 ==========
+            if (currentLiveChannelItem != null) {
+                epgListAdapter.CanBack(currentLiveChannelItem.getinclude_back());
+            }
+            epgListAdapter.setNewData(currentEpgData);
+            // =============================================
+
+            // 更新底部当前/下一个节目信息
             Date now = new Date();
+            boolean found = false;
             for (int size = currentEpgData.size() - 1; size >= 0; size--) {
                 Epginfo epg = currentEpgData.get(size);
                 if (now.after(epg.startdateTime) && now.before(epg.enddateTime)) {
@@ -710,16 +731,21 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                         tv_next_time.setText(LiveConstants.DEFAULT_START_TIME + " - " + LiveConstants.DEFAULT_END_TIME);
                         tv_next_name.setText(LiveConstants.NO_INFO);
                     }
+                    found = true;
                     break;
                 }
             }
-            if (currentLiveChannelItem != null) {
-                epgListAdapter.CanBack(currentLiveChannelItem.getinclude_back());
+            if (!found) {
+                tv_curr_name.setText(LiveConstants.NO_PROGRAM);
+                tv_next_name.setText("");
             }
-            epgListAdapter.setNewData(currentEpgData);
         } else {
             tv_curr_name.setText(LiveConstants.NO_PROGRAM);
             tv_next_name.setText("");
+            // 无数据时清空左侧列表
+            if (epgListAdapter != null) {
+                epgListAdapter.setNewData(new ArrayList<>());
+            }
         }
     }
 
@@ -730,7 +756,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
 
     // ========== 播放控制 ==========
     private boolean playChannel(int channelGroupIndex, int liveChannelIndex, boolean changeSource) {
-        // 重置时移模式（通过 Manager）
         if (playbackManager != null && playbackManager.isShiyiMode()) {
             resetShiyiMode();
         }
@@ -753,7 +778,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         }
         if ((channelGroupIndex == currentChannelGroupIndex && liveChannelIndex == currentLiveChannelIndex && !changeSource)
                 || (changeSource && currentLiveChannelItem != null && currentLiveChannelItem.getSourceNum() == 1)) {
-            // 单源或相同频道：只显示信息（Manager 内部已处理，这里不再重复调用）
             showChannelInfo();
             return true;
         }
@@ -778,9 +802,8 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         }
 
         playbackManager.playChannel(currentLiveChannelItem, changeSource);
-        // 确保 EPG 数据被立即刷新（关键：修复左侧标签消失）
+        // 立即刷新 EPG（左侧列表 + 底部信息）
         getEpg(new Date());
-        showBottomEpg();
 
         return true;
     }
@@ -1000,8 +1023,8 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
 
     private void initLiveState() {
         if (settingsPanel != null) {
-            settingsPanel.setCurrentScale(0);
-            settingsPanel.setCurrentPlayerType(0);
+            settingsPanel.setCurrentScale(playbackManager.getCurrentScale());
+            settingsPanel.setCurrentPlayerType(playbackManager.getCurrentPlayerType());
         }
         showTime();
         showNetSpeed();
