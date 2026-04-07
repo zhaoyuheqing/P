@@ -158,7 +158,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         if (mEpgInfoGridView != null) mEpgInfoGridView.requestLayout();
     };
 
-    // 修正：使用匿名内部类，以便在 run() 中正确引用 this (Runnable 自身)
     private final Runnable mUpdateTimeRun = new Runnable() {
         @Override
         public void run() {
@@ -293,6 +292,13 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             public void onCurrentChannelChanged(LiveChannelItem channel, boolean isChangeSource) {
                 currentLiveChannelItem = channel;
                 updateChannelUI(channel);
+                
+                // 无论切台还是换源，都同步解码方式和画面比例的高亮
+                if (settingsPanel != null && playbackManager != null) {
+                    settingsPanel.syncScale(playbackManager.getCurrentScale());
+                    settingsPanel.syncPlayerType(playbackManager.getCurrentPlayerType());
+                }
+                
                 if (!isChangeSource) {
                     if (channelListPanel != null) {
                         channelListPanel.updateCurrentSelection(currentChannelGroupIndex, currentLiveChannelIndex);
@@ -315,6 +321,16 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             @Override
             public void onShiyiModeChanged(boolean isShiyi, String timeRange) {
                 showBottomEpg();
+            }
+
+            @Override
+            public void changeSource(int direction) {
+                // 左右键切源：调用 Activity 自己的方法，最终会走到 playChannel(..., true)
+                if (direction > 0) {
+                    playNextSource();
+                } else {
+                    playPreSource();
+                }
             }
         });
 
@@ -744,10 +760,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             if (settingsPanel != null) {
                 settingsPanel.updateSourceList(currentLiveChannelItem);
                 settingsPanel.setCurrentSourceIndex(currentLiveChannelItem.getSourceIndex());
-                if (playbackManager != null) {
-                    settingsPanel.syncScale(playbackManager.getCurrentScale());
-                    settingsPanel.syncPlayerType(playbackManager.getCurrentPlayerType());
-                }
+                // 注意：同步高亮已移至 onCurrentChannelChanged，此处不再重复
             }
             if (channelListPanel != null) {
                 channelListPanel.updateCurrentSelection(currentChannelGroupIndex, currentLiveChannelIndex);
@@ -806,8 +819,13 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         }
     }
 
-    public void playPreSource() { if (playbackManager != null) playbackManager.playPreSource(); }
-    public void playNextSource() { if (playbackManager != null) playbackManager.playNextSource(); }
+    public void playPreSource() { 
+        if (playbackManager != null) playbackManager.playPreSource(); 
+    }
+    
+    public void playNextSource() { 
+        if (playbackManager != null) playbackManager.playNextSource(); 
+    }
 
     private void replayChannel() {
         if (currentLiveChannelItem == null || currentChannelGroupIndex < 0) return;
@@ -818,6 +836,12 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         getEpg(new Date());
         showChannelInfo();
         mHandler.post(tv_sys_timeRunnable);
+        
+        // 确保重播后高亮正确
+        if (settingsPanel != null && playbackManager != null) {
+            settingsPanel.syncScale(playbackManager.getCurrentScale());
+            settingsPanel.syncPlayerType(playbackManager.getCurrentPlayerType());
+        }
     }
 
     // ========== 初始化 ==========
