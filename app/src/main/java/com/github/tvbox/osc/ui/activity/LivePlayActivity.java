@@ -158,25 +158,35 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         if (mEpgInfoGridView != null) mEpgInfoGridView.requestLayout();
     };
 
-    private final Runnable mUpdateTimeRun = () -> {
-        tvTime.setText(new SimpleDateFormat(LiveConstants.TIME_FORMAT_HHMMSS).format(new Date()));
-        mHandler.postDelayed(this, 1000);
-    };
-
-    private final Runnable mUpdateNetSpeedRun = () -> {
-        if (playbackManager != null) {
-            tvNetSpeed.setText(String.format("%.2fMB/s", (float) playbackManager.getTcpSpeed() / 1024.0 / 1024.0));
+    // 修正：使用匿名内部类，以便在 run() 中正确引用 this (Runnable 自身)
+    private final Runnable mUpdateTimeRun = new Runnable() {
+        @Override
+        public void run() {
+            tvTime.setText(new SimpleDateFormat(LiveConstants.TIME_FORMAT_HHMMSS).format(new Date()));
+            mHandler.postDelayed(this, 1000);
         }
-        mHandler.postDelayed(this, 1000);
     };
 
-    private final Runnable tv_sys_timeRunnable = () -> {
-        tv_sys_time.setText(new SimpleDateFormat(LiveConstants.TIME_FORMAT_HHMMSS, Locale.ENGLISH).format(new Date()));
-        mHandler.postDelayed(this, 1000);
-        if (playbackManager != null && !mIsDragging && playbackManager.getDuration() > 0) {
-            int pos = (int) playbackManager.getCurrentPosition();
-            mCurrentTime.setText(stringForTimeVod(pos));
-            mSeekBar.setProgress(pos);
+    private final Runnable mUpdateNetSpeedRun = new Runnable() {
+        @Override
+        public void run() {
+            if (playbackManager != null) {
+                tvNetSpeed.setText(String.format("%.2fMB/s", (float) playbackManager.getTcpSpeed() / 1024.0 / 1024.0));
+            }
+            mHandler.postDelayed(this, 1000);
+        }
+    };
+
+    private final Runnable tv_sys_timeRunnable = new Runnable() {
+        @Override
+        public void run() {
+            tv_sys_time.setText(new SimpleDateFormat(LiveConstants.TIME_FORMAT_HHMMSS, Locale.ENGLISH).format(new Date()));
+            mHandler.postDelayed(this, 1000);
+            if (playbackManager != null && !mIsDragging && playbackManager.getDuration() > 0) {
+                int pos = (int) playbackManager.getCurrentPosition();
+                mCurrentTime.setText(stringForTimeVod(pos));
+                mSeekBar.setProgress(pos);
+            }
         }
     };
 
@@ -700,7 +710,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
 
     // ========== 播放控制 ==========
     private boolean playChannel(int channelGroupIndex, int liveChannelIndex, boolean changeSource) {
-        // 无论切台还是换源，都要退出时移模式并清除左侧高亮（修复换源时回放高亮残留）
         if (playbackManager != null && playbackManager.isShiyiMode()) {
             resetShiyiMode();
         }
