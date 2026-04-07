@@ -43,18 +43,17 @@ public class LivePlaybackManager {
     private PlaybackListener listener;
 
     private final Runnable timeoutChangeSourceRun = this::handleTimeoutChangeSource;
-    private final Runnable timeoutReplayRun = this::replayChannel;  // 引用 replayChannel 方法
+    private final Runnable timeoutReplayRun = this::handleTimeoutReplay;
 
     public interface PlaybackListener {
         boolean onSingleTap(MotionEvent e);
         void onLongPress();
         void onPlayStateChanged(int playState);
         void onVideoSizeChanged(int width, int height);
-        void onChannelInfoUpdate(LiveChannelItem channel);
+        void onCurrentChannelChanged(LiveChannelItem channel, boolean isChangeSource);
+        void onAutoSwitchToNextChannel(boolean reverse);
+        void onTimeoutReplay();   // 超时重放时通知 Activity 重新获取频道
         void onShiyiModeChanged(boolean isShiyi, String timeRange);
-        void onNeedShowBottomEpg();
-        void onShowChannelInfo();
-        void onAutoSwitchToNextChannel();
     }
 
     public LivePlaybackManager(@NonNull Context context, @NonNull Handler handler, @NonNull VideoView videoView) {
@@ -100,7 +99,6 @@ public class LivePlaybackManager {
         videoView.setVideoController(controller);
         videoView.setProgressManager(null);
 
-        // 恢复用户保存的缩放和解码偏好（与原脚本一致）
         playerManager.init(videoView);
         this.currentScale = playerManager.getLivePlayerScale();
         this.currentPlayerType = playerManager.getLivePlayerType();
@@ -141,7 +139,7 @@ public class LivePlaybackManager {
         }
     }
 
-    private void cancelAllTimeouts() {
+    public void cancelAllTimeouts() {
         mainHandler.removeCallbacks(timeoutChangeSourceRun);
         mainHandler.removeCallbacks(timeoutReplayRun);
     }
@@ -151,9 +149,20 @@ public class LivePlaybackManager {
         currentChangeSourceTimes++;
         if (currentChannel.getSourceNum() == currentChangeSourceTimes) {
             currentChangeSourceTimes = 0;
-            if (listener != null) listener.onAutoSwitchToNextChannel();
+            if (listener != null) {
+                boolean reverse = Hawk.get(HawkConfig.LIVE_CHANNEL_REVERSE, false);
+                listener.onAutoSwitchToNextChannel(reverse);
+            }
         } else {
             playNextSource();
+        }
+    }
+
+    private void handleTimeoutReplay() {
+        if (currentChannel == null) return;
+        // 超时重放：通知 Activity 重新获取当前频道的最新对象
+        if (listener != null) {
+            listener.onTimeoutReplay();
         }
     }
 
@@ -167,8 +176,7 @@ public class LivePlaybackManager {
 
         if (isChangeSource && channel.getSourceNum() == 1) {
             if (listener != null) {
-                listener.onChannelInfoUpdate(channel);
-                listener.onShowChannelInfo();
+                listener.onCurrentChannelChanged(channel, true);
             }
             return;
         }
@@ -176,15 +184,17 @@ public class LivePlaybackManager {
         resetShiyiMode();
         if (videoView != null) videoView.release();
         currentChannel = channel;
+
+        currentChannel.setinclude_back(
+            currentChannel.getUrl().indexOf(LiveConstants.PLTV_FLAG + "8888") != -1);
+
         playerManager.getLiveChannelPlayer(videoView, channel.getChannelName());
-
-        if (listener != null) {
-            listener.onChannelInfoUpdate(channel);
-            listener.onNeedShowBottomEpg();
-        }
-
         videoView.setUrl(channel.getUrl(), buildPlayHeaders(channel.getUrl()));
         videoView.start();
+
+        if (listener != null) {
+            listener.onCurrentChannelChanged(channel, isChangeSource);
+        }
     }
 
     public void playShiyi(String shiyiTimeRange) {
@@ -211,13 +221,6 @@ public class LivePlaybackManager {
         resetShiyiMode();
         currentChannel.preSource();
         playChannel(currentChannel, true);
-    }
-
-    // 超时重试时使用的重放方法（不重新获取频道，直接重放当前频道）
-    public void replayChannel() {
-        if (currentChannel == null) return;
-        resetShiyiMode();
-        playChannel(currentChannel, false);
     }
 
     public void resetShiyiMode() {
@@ -360,7 +363,7 @@ public class LivePlaybackManager {
         return currentPlayerType;
     }
 
-    // ========== 设置功能（画面比例 / 解码方式）==========
+    // ========== 设置功能 ==========
     public void changeScale(int scaleIndex) {
         if (videoView != null && currentChannel != null) {
             playerManager.changeLivePlayerScale(videoView, scaleIndex, currentChannel.getChannelName());
@@ -370,11 +373,10 @@ public class LivePlaybackManager {
 
     public void changePlayerType(int typeIndex) {
         if (videoView == null || currentChannel == null) return;
+        videoView.release();
         playerManager.changeLivePlayerType(videoView, typeIndex, currentChannel.getChannelName());
         this.currentPlayerType = typeIndex;
-        // 重新加载当前流使解码器生效
         String url = currentChannel.getUrl();
-        videoView.release();
         videoView.setUrl(url, buildPlayHeaders(url));
         videoView.start();
     }
