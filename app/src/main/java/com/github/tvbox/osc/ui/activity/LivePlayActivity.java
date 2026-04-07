@@ -226,10 +226,9 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
     public void getEpg(Date date) {
         if (currentLiveChannelItem == null || currentLiveChannelItem.getChannelName() == null) return;
         final String channelName = currentLiveChannelItem.getChannelName();
+        final String targetDateStr = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD).format(date);
         final Date requestDate = date;
-        SimpleDateFormat sdf = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD);
-        final String dateStr = sdf.format(date);
-        ArrayList<Epginfo> cached = epgCacheHelper.getCachedEpg(channelName, dateStr);
+        ArrayList<Epginfo> cached = epgCacheHelper.getCachedEpg(channelName, targetDateStr);
         if (cached != null && !cached.isEmpty()) {
             showEpg(date, cached);
             showBottomEpg();
@@ -238,14 +237,16 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         epgCacheHelper.requestEpg(channelName, date, true, new EpgCacheHelper.EpgCallback() {
             @Override
             public void onSuccess(String channelName, Date date, ArrayList<Epginfo> epgList) {
-                if (currentLiveChannelItem != null && channelName.equals(currentLiveChannelItem.getChannelName()) && date.equals(requestDate)) {
+                String resultDateStr = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD).format(date);
+                if (currentLiveChannelItem != null && channelName.equals(currentLiveChannelItem.getChannelName()) && resultDateStr.equals(targetDateStr)) {
                     showEpg(date, epgList);
                     showBottomEpg();
                 }
             }
             @Override
             public void onFailure(String channelName, Date date, Exception e) {
-                if (currentLiveChannelItem != null && channelName.equals(currentLiveChannelItem.getChannelName()) && date.equals(requestDate)) {
+                String resultDateStr = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD).format(date);
+                if (currentLiveChannelItem != null && channelName.equals(currentLiveChannelItem.getChannelName()) && resultDateStr.equals(targetDateStr)) {
                     showEpg(date, new ArrayList<>());
                     showBottomEpg();
                 }
@@ -326,7 +327,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
 
             @Override
             public void onShiyiModeChanged(boolean isShiyi, String timeRange) {
-                // 时移模式变化时刷新底部 EPG（显示实时直播信息）
                 showBottomEpg();
             }
         });
@@ -672,21 +672,40 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                 epgListAdapter.CanBack(currentLiveChannelItem.getinclude_back());
             }
             epgListAdapter.setNewData(epgdata);
-            int i = -1;
-            Date now = new Date();
-            for (int size = epgdata.size() - 1; size >= 0; size--) {
-                if (now.compareTo(epgdata.get(size).startdateTime) >= 0) {
-                    i = size;
-                    break;
-                }
-            }
+
             boolean isShiyi = playbackManager != null && playbackManager.isShiyiMode();
-            if (!isShiyi && i >= 0 && now.compareTo(epgdata.get(i).enddateTime) <= 0) {
-                mEpgInfoGridView.setSelectedPosition(i);
-                mEpgInfoGridView.setSelection(i);
-                epgListAdapter.setSelectedEpgIndex(i);
-                int finalI = i;
-                mEpgInfoGridView.post(() -> mEpgInfoGridView.smoothScrollToPosition(finalI));
+            Date now = new Date();
+
+            if (!isShiyi) {
+                // 直播模式：高亮当前正在直播的节目
+                int i = -1;
+                for (int size = epgdata.size() - 1; size >= 0; size--) {
+                    if (now.compareTo(epgdata.get(size).startdateTime) >= 0) {
+                        i = size;
+                        break;
+                    }
+                }
+                if (i >= 0 && now.compareTo(epgdata.get(i).enddateTime) <= 0) {
+                    mEpgInfoGridView.setSelectedPosition(i);
+                    mEpgInfoGridView.setSelection(i);
+                    epgListAdapter.setSelectedEpgIndex(i);
+                    int finalI = i;
+                    mEpgInfoGridView.post(() -> mEpgInfoGridView.smoothScrollToPosition(finalI));
+                }
+            } else {
+                // 时移模式：保持之前通过 setShiyiSelection 设置的高亮，只滚动到当前直播位置作为参考（不改变选中）
+                int liveIndex = -1;
+                for (int size = epgdata.size() - 1; size >= 0; size--) {
+                    if (now.compareTo(epgdata.get(size).startdateTime) >= 0) {
+                        liveIndex = size;
+                        break;
+                    }
+                }
+                if (liveIndex >= 0 && now.compareTo(epgdata.get(liveIndex).enddateTime) <= 0) {
+                    final int targetPos = liveIndex;
+                    mEpgInfoGridView.post(() -> mEpgInfoGridView.smoothScrollToPosition(targetPos));
+                }
+                // 注意：不调用 setSelectedEpgIndex，保留之前的回放高亮
             }
         } else {
             Epginfo epgbcinfo = new Epginfo(date, LiveConstants.NO_PROGRAM, date,
