@@ -326,6 +326,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
 
             @Override
             public void onShiyiModeChanged(boolean isShiyi, String timeRange) {
+                // 时移模式变化时刷新底部 EPG（显示实时直播信息）
                 showBottomEpg();
             }
         });
@@ -679,7 +680,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                     break;
                 }
             }
-            // 修复：时移模式下不自动高亮直播段，保留回放高亮
             boolean isShiyi = playbackManager != null && playbackManager.isShiyiMode();
             if (!isShiyi && i >= 0 && now.compareTo(epgdata.get(i).enddateTime) <= 0) {
                 mEpgInfoGridView.setSelectedPosition(i);
@@ -706,7 +706,8 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             return;
         }
 
-        showChannelInfo();
+        // 注意：不要在此处调用 showChannelInfo()，避免递归
+
         String channelName = currentLiveChannelItem.getChannelName();
         Date selectedDate = epgDateAdapter.getSelectedIndex() < 0
                 ? new Date()
@@ -795,7 +796,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             if (settingsPanel != null) {
                 settingsPanel.updateSourceList(currentLiveChannelItem);
                 settingsPanel.setCurrentSourceIndex(currentLiveChannelItem.getSourceIndex());
-                // 同步设置面板的解码和比例高亮
                 if (playbackManager != null) {
                     settingsPanel.syncScale(playbackManager.getCurrentScale());
                     settingsPanel.syncPlayerType(playbackManager.getCurrentPlayerType());
@@ -810,7 +810,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         getEpg(new Date());
         mHandler.post(tv_sys_timeRunnable);
 
-        // 预加载当前频道的所有日期 EPG（高优先级）
         if (epgCacheHelper != null && currentLiveChannelItem != null) {
             epgCacheHelper.preloadCurrentChannel(currentLiveChannelItem.getChannelName());
         }
@@ -1103,7 +1102,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                     showChannelList();
                 }
             }
-            // 延迟预加载其他频道 EPG（低优先级）
             if (epgCacheHelper != null && currentLiveChannelItem != null) {
                 List<String> allChannelNames = new ArrayList<>();
                 for (LiveChannelGroup group : liveChannelGroupList) {
