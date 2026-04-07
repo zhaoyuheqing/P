@@ -52,7 +52,7 @@ public class LivePlaybackManager {
         void onVideoSizeChanged(int width, int height);
         void onCurrentChannelChanged(LiveChannelItem channel, boolean isChangeSource);
         void onAutoSwitchToNextChannel(boolean reverse);
-        void onTimeoutReplay();   // 超时重放时通知 Activity 重新获取频道
+        void onTimeoutReplay();
         void onShiyiModeChanged(boolean isShiyi, String timeRange);
     }
 
@@ -119,6 +119,7 @@ public class LivePlaybackManager {
             case VideoView.STATE_BUFFERED:
             case VideoView.STATE_PLAYING:
                 cancelAllTimeouts();
+                currentChangeSourceTimes = 0;  // 修复：重置超时换源计数器
                 break;
             case VideoView.STATE_BUFFERING:
             case VideoView.STATE_PREPARING:
@@ -160,7 +161,6 @@ public class LivePlaybackManager {
 
     private void handleTimeoutReplay() {
         if (currentChannel == null) return;
-        // 超时重放：通知 Activity 重新获取当前频道的最新对象
         if (listener != null) {
             listener.onTimeoutReplay();
         }
@@ -173,6 +173,7 @@ public class LivePlaybackManager {
 
     public void playChannel(LiveChannelItem channel, boolean isChangeSource) {
         if (channel == null) return;
+        if (videoView == null) return;  // 修复：空指针保护
 
         if (isChangeSource && channel.getSourceNum() == 1) {
             if (listener != null) {
@@ -182,7 +183,7 @@ public class LivePlaybackManager {
         }
 
         resetShiyiMode();
-        if (videoView != null) videoView.release();
+        videoView.release();
         currentChannel = channel;
 
         currentChannel.setinclude_back(
@@ -199,12 +200,14 @@ public class LivePlaybackManager {
 
     public void playShiyi(String shiyiTimeRange) {
         if (currentChannel == null) return;
+        if (videoView == null) return;  // 修复：空指针保护
+
         isShiyiMode = true;
         shiyiTime = shiyiTimeRange;
         if (listener != null) listener.onShiyiModeChanged(true, shiyiTimeRange);
 
         String[] urls = buildShiyiUrls(currentChannel.getUrl(), shiyiTimeRange);
-        if (videoView != null) videoView.release();
+        videoView.release();
         videoView.setUrl(urls[0], buildPlayHeaders(urls[0]));
         videoView.start();
     }
