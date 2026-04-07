@@ -42,90 +42,39 @@ public class LiveSettingsPanel {
 
     private final WeakReference<Context> contextRef;
     private final Handler handler;
-
     private final WeakReference<LinearLayout> rootViewRef;
     private final WeakReference<TvRecyclerView> groupViewRef;
     private final WeakReference<TvRecyclerView> itemViewRef;
-
     private LiveSettingGroupAdapter groupAdapter;
     private LiveSettingItemAdapter itemAdapter;
     private final ArrayList<LiveSettingGroup> settingGroups = new ArrayList<>();
-
     private SettingsListener listener;
     private boolean isShowing = false;
     private LiveChannelItem currentChannel;
-
     private int currentScaleIndex = 0;
     private int currentPlayerTypeIndex = 0;
+    private final Runnable hideRunnable = this::hideInternal;
+    private final Runnable focusAndShowRunnable = this::focusAndShowInternal;
+    private final Runnable requestLayoutRunnable = this::requestLayoutInternal;
 
-    private final Runnable hideRunnable = new Runnable() {
-        @Override
-        public void run() {
-            hideInternal();
-        }
-    };
-
-    private final Runnable focusAndShowRunnable = new Runnable() {
-        @Override
-        public void run() {
-            focusAndShowInternal();
-        }
-    };
-
-    private final Runnable requestLayoutRunnable = new Runnable() {
-        @Override
-        public void run() {
-            requestLayoutInternal();
-        }
-    };
-
-    public LiveSettingsPanel(@NonNull Context context,
-                             @NonNull Handler handler,
-                             @NonNull LinearLayout rootView,
-                             @NonNull TvRecyclerView groupView,
+    public LiveSettingsPanel(@NonNull Context context, @NonNull Handler handler,
+                             @NonNull LinearLayout rootView, @NonNull TvRecyclerView groupView,
                              @NonNull TvRecyclerView itemView) {
-
         this.contextRef = new WeakReference<>(context);
         this.handler = handler;
         this.rootViewRef = new WeakReference<>(rootView);
         this.groupViewRef = new WeakReference<>(groupView);
         this.itemViewRef = new WeakReference<>(itemView);
-
         rootView.setVisibility(View.INVISIBLE);
     }
 
-    public void init() {
-        initSettingGroups();
-        initGroupView();
-        initItemView();
-    }
-
-    public void setListener(SettingsListener listener) {
-        this.listener = listener;
-    }
-
-    public void setCurrentScale(int scaleIndex) {
-        this.currentScaleIndex = scaleIndex;
-        updateItemSelectionIfNeeded(1, scaleIndex);
-    }
-
-    public void setCurrentPlayerType(int typeIndex) {
-        this.currentPlayerTypeIndex = typeIndex;
-        updateItemSelectionIfNeeded(2, typeIndex);
-    }
+    public void init() { initSettingGroups(); initGroupView(); initItemView(); }
+    public void setListener(SettingsListener listener) { this.listener = listener; }
+    public void setCurrentScale(int scaleIndex) { this.currentScaleIndex = scaleIndex; updateItemSelectionIfNeeded(1, scaleIndex); }
+    public void setCurrentPlayerType(int typeIndex) { this.currentPlayerTypeIndex = typeIndex; updateItemSelectionIfNeeded(2, typeIndex); }
 
     /**
-     * 同步当前的解码方式高亮（从播放器获取最新值）
-     */
-    public void syncPlayerType(int typeIndex) {
-        this.currentPlayerTypeIndex = typeIndex;
-        if (isShowing && groupAdapter != null && groupAdapter.getSelectedGroupIndex() == 2 && itemAdapter != null) {
-            itemAdapter.selectItem(typeIndex, true, false);
-        }
-    }
-
-    /**
-     * 同步当前的画面比例高亮（从播放器获取最新值）
+     * 同步画面比例高亮（外部调用，如切换频道后）
      */
     public void syncScale(int scaleIndex) {
         this.currentScaleIndex = scaleIndex;
@@ -134,10 +83,19 @@ public class LiveSettingsPanel {
         }
     }
 
+    /**
+     * 同步解码方式高亮（外部调用，如切换频道后）
+     */
+    public void syncPlayerType(int typeIndex) {
+        this.currentPlayerTypeIndex = typeIndex;
+        if (isShowing && groupAdapter != null && groupAdapter.getSelectedGroupIndex() == 2 && itemAdapter != null) {
+            itemAdapter.selectItem(typeIndex, true, false);
+        }
+    }
+
     private void updateItemSelectionIfNeeded(int groupIndex, int itemIndex) {
         if (!isShowing || groupAdapter == null || itemAdapter == null) return;
         if (groupAdapter.getSelectedGroupIndex() != groupIndex) return;
-
         itemAdapter.selectItem(itemIndex, true, false);
     }
 
@@ -208,22 +166,12 @@ public class LiveSettingsPanel {
         groupAdapter.setNewData(settingGroups);
 
         groupView.setOnItemListener(new TvRecyclerView.OnItemListener() {
-            @Override
-            public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {}
-
-            @Override
-            public void onItemSelected(TvRecyclerView parent, View itemView, int position) {
-                selectGroup(position, true);
-            }
-
-            @Override
-            public void onItemClick(TvRecyclerView parent, View itemView, int position) {}
+            @Override public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {}
+            @Override public void onItemSelected(TvRecyclerView parent, View itemView, int position) { selectGroup(position, true); }
+            @Override public void onItemClick(TvRecyclerView parent, View itemView, int position) {}
         });
 
-        groupAdapter.setOnItemClickListener((adapter, view, position) -> {
-            FastClickCheckUtil.check(view);
-            selectGroup(position, false);
-        });
+        groupAdapter.setOnItemClickListener((adapter, view, position) -> { FastClickCheckUtil.check(view); selectGroup(position, false); });
     }
 
     private void initItemView() {
@@ -237,29 +185,18 @@ public class LiveSettingsPanel {
         itemView.setAdapter(itemAdapter);
 
         itemView.setOnItemListener(new TvRecyclerView.OnItemListener() {
-            @Override
-            public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {}
-
-            @Override
-            public void onItemSelected(TvRecyclerView parent, View itemView, int position) {
+            @Override public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {}
+            @Override public void onItemSelected(TvRecyclerView parent, View itemView, int position) {
                 if (position < 0) return;
                 if (groupAdapter != null) groupAdapter.setFocusedGroupIndex(-1);
                 if (itemAdapter != null) itemAdapter.setFocusedItemIndex(position);
-
                 handler.removeCallbacks(hideRunnable);
                 handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_SETTINGS_MS);
             }
-
-            @Override
-            public void onItemClick(TvRecyclerView parent, View itemView, int position) {
-                clickItem(position);
-            }
+            @Override public void onItemClick(TvRecyclerView parent, View itemView, int position) { clickItem(position); }
         });
 
-        itemAdapter.setOnItemClickListener((adapter, view, position) -> {
-            FastClickCheckUtil.check(view);
-            clickItem(position);
-        });
+        itemAdapter.setOnItemClickListener((adapter, view, position) -> { FastClickCheckUtil.check(view); clickItem(position); });
     }
 
     // ==================== 选择逻辑 ====================
@@ -379,7 +316,6 @@ public class LiveSettingsPanel {
         }
 
         refreshSourceListDisplay();
-
         if (groupAdapter != null) groupAdapter.setNewData(settingGroups);
         selectGroup(0, false);
 
@@ -429,9 +365,7 @@ public class LiveSettingsPanel {
         handler.postDelayed(requestLayoutRunnable, 255);
     }
 
-    public void hide() {
-        hideInternal();
-    }
+    public void hide() { hideInternal(); }
 
     private void hideInternal() {
         LinearLayout rootView = rootViewRef.get();
@@ -518,9 +452,7 @@ public class LiveSettingsPanel {
         }
     }
 
-    public boolean isShowing() {
-        return isShowing;
-    }
+    public boolean isShowing() { return isShowing; }
 
     private void showToast(String message) {
         Context ctx = contextRef.get();
