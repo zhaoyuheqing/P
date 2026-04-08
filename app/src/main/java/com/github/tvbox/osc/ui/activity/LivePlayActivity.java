@@ -250,7 +250,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                     showBottomEpg();
                 }
             }
-        }, true);  // isCurrentChannel = true
+        }, true);
     }
 
     // ========== 生命周期 ==========
@@ -302,7 +302,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                 currentLiveChannelItem = channel;
                 updateChannelUI(channel);
                 
-                // 【修复】无论是否换源，都同步解码方式和画面比例的高亮
+                // 无论是否换源，都同步解码方式和画面比例的高亮
                 if (settingsPanel != null && playbackManager != null) {
                     settingsPanel.setCurrentScale(playbackManager.getCurrentScale());
                     settingsPanel.setCurrentPlayerType(playbackManager.getCurrentPlayerType());
@@ -694,7 +694,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             }
         }
         
-        // 判断是否需要保留时移高亮（可选优化）
+        // 判断是否需要保留时移高亮
         boolean shouldKeepShiyiHighlight = false;
         if (playbackManager != null && playbackManager.isShiyiMode()) {
             String shiyiTime = playbackManager.getShiyiTime();
@@ -725,14 +725,14 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
     }
 
     private void showBottomEpg() {
-        // 【特殊需求】时移模式下也显示实时直播信息，因此删除开头的 isShiyiMode 判断
+        // 时移模式下也显示实时直播信息，不再判断 isShiyiMode
+        // 注意：不再调用 showChannelInfo()，避免无限递归（由 showChannelInfo 调用本方法即可）
         if (currentLiveChannelItem == null || currentLiveChannelItem.getChannelName() == null) {
             tv_curr_name.setText(LiveConstants.NO_PROGRAM);
             tv_next_name.setText("");
             return;
         }
 
-        showChannelInfo();
         String channelName = currentLiveChannelItem.getChannelName();
         Date selectedDate = epgDateAdapter.getSelectedIndex() < 0
                 ? new Date()
@@ -821,7 +821,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             if (settingsPanel != null) {
                 settingsPanel.updateSourceList(currentLiveChannelItem);
                 settingsPanel.setCurrentSourceIndex(currentLiveChannelItem.getSourceIndex());
-                // 高亮同步已移至 onCurrentChannelChanged 回调，此处不再重复
             }
             if (channelListPanel != null) {
                 channelListPanel.updateCurrentSelection(currentChannelGroupIndex, currentLiveChannelIndex);
@@ -832,7 +831,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         getEpg(new Date());
         mHandler.post(tv_sys_timeRunnable);
         
-        // 【修复】预加载当前频道的所有日期 EPG
+        // 预加载当前频道的所有日期 EPG
         if (epgCacheHelper != null && currentLiveChannelItem != null) {
             epgCacheHelper.preloadCurrentChannel(currentLiveChannelItem.getChannelName());
         }
@@ -1131,7 +1130,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                     showChannelList();
                 }
             }
-            // 【修复】延迟预加载其他频道 EPG
+            // 延迟预加载其他频道 EPG
             if (epgCacheHelper != null && !liveChannelGroupList.isEmpty()) {
                 List<String> allChannelNames = new ArrayList<>();
                 for (LiveChannelGroup group : liveChannelGroupList) {
@@ -1329,7 +1328,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             int groupIndex = bundle.getInt("groupIndex", 0);
             int channelIndex = bundle.getInt("channelIndex", 0);
             
-            // 【修复】处理密码分组
             if (isNeedInputPassword(groupIndex)) {
                 showPasswordDialogForGroup(groupIndex, channelIndex);
             } else {
