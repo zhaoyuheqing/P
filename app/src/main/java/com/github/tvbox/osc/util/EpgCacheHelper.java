@@ -330,19 +330,10 @@ public class EpgCacheHelper {
                                     JSONObject jSONObject = jSONArray.getJSONObject(b);
                                     String startTime = jSONObject.optString("start", LiveConstants.DEFAULT_START_TIME);
                                     String endTime = jSONObject.optString("end", LiveConstants.DEFAULT_END_TIME);
-                                    
-                                    // 跨天处理
-                                    Date endDate = date;
-                                    if (endTime.compareTo(startTime) < 0) {
-                                        Calendar cal = Calendar.getInstance();
-                                        cal.setTime(date);
-                                        cal.add(Calendar.DAY_OF_MONTH, 1);
-                                        endDate = cal.getTime();
-                                    }
-                                    
+                                    // 注意：不做跨天修正，保持原始解析（enddateTime 仍为当天）
                                     Epginfo epg = new Epginfo(date,
                                             jSONObject.optString("title", LiveConstants.NO_PROGRAM),
-                                            endDate,
+                                            date,
                                             startTime, endTime, b);
                                     arrayList.add(epg);
                                 }
