@@ -86,19 +86,31 @@ public class EpgCacheHelper {
         if (channelName == null || date == null || callback == null) return;
         SimpleDateFormat sdf = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD);
         String dateStr = sdf.format(date);
+        
         ArrayList<Epginfo> cached = getFromMemoryCache(channelName, dateStr);
         if (cached != null && !cached.isEmpty()) {
-            mainHandler.post(() -> callback.onSuccess(channelName, date, cached));
+            final String finalChannelName = channelName;
+            final Date finalDate = date;
+            final ArrayList<Epginfo> finalCached = cached;
+            mainHandler.post(() -> callback.onSuccess(finalChannelName, finalDate, finalCached));
             return;
         }
+        
         cached = getFromFileCache(channelName, dateStr);
         if (cached != null && !cached.isEmpty()) {
             putToMemoryCache(channelName, dateStr, cached);
-            mainHandler.post(() -> callback.onSuccess(channelName, date, cached));
+            final String finalChannelName = channelName;
+            final Date finalDate = date;
+            final ArrayList<Epginfo> finalCached = cached;
+            mainHandler.post(() -> callback.onSuccess(finalChannelName, finalDate, finalCached));
             return;
         }
+        
         final long requestId = isCurrentChannel ? currentChannelRequestId.incrementAndGet() : 0;
-        highPriorityExecutor.execute(() -> fetchFromNetwork(channelName, date, dateStr, requestId, callback));
+        final String reqChannelName = channelName;
+        final Date reqDate = date;
+        final String reqDateStr = dateStr;
+        highPriorityExecutor.execute(() -> fetchFromNetwork(reqChannelName, reqDate, reqDateStr, requestId, callback));
     }
     
     public void preloadCurrentChannel(String channelName) {
@@ -193,7 +205,9 @@ public class EpgCacheHelper {
             }
             String logoUrl = cacheData.optString("logoUrl", null);
             if (logoUrl != null && !logoUrl.isEmpty() && logoCallback != null) {
-                mainHandler.post(() -> logoCallback.onLogoLoaded(channelName, logoUrl));
+                final String finalChannelName = channelName;
+                final String finalLogoUrl = logoUrl;
+                mainHandler.post(() -> logoCallback.onLogoLoaded(finalChannelName, finalLogoUrl));
             }
             JSONArray epgArray = cacheData.optJSONArray("epgList");
             if (epgArray == null || epgArray.length() == 0) return null;
@@ -317,8 +331,7 @@ public class EpgCacheHelper {
                                     String startTime = jSONObject.optString("start", LiveConstants.DEFAULT_START_TIME);
                                     String endTime = jSONObject.optString("end", LiveConstants.DEFAULT_END_TIME);
                                     
-                                    // ========== 修复跨天问题 ==========
-                                    // 如果结束时间小于开始时间，说明节目跨天，结束日期应为第二天
+                                    // 跨天处理
                                     Date endDate = date;
                                     if (endTime.compareTo(startTime) < 0) {
                                         Calendar cal = Calendar.getInstance();
@@ -339,7 +352,10 @@ public class EpgCacheHelper {
                     if (!arrayList.isEmpty()) {
                         saveToFileCache(channelName, dateStr, arrayList, logoUrl);
                         if (callback != null && requestId != 0 && requestId == currentChannelRequestId.get()) {
-                            mainHandler.post(() -> callback.onSuccess(channelName, date, arrayList));
+                            final String finalChannelName = channelName;
+                            final Date finalDate = date;
+                            final ArrayList<Epginfo> finalArrayList = arrayList;
+                            mainHandler.post(() -> callback.onSuccess(finalChannelName, finalDate, finalArrayList));
                         }
                     }
                 }
@@ -347,7 +363,10 @@ public class EpgCacheHelper {
         } catch (Exception e) {
             e.printStackTrace();
             if (callback != null && requestId != 0) {
-                mainHandler.post(() -> callback.onFailure(channelName, date, e));
+                final String finalChannelName = channelName;
+                final Date finalDate = date;
+                final Exception finalException = e;
+                mainHandler.post(() -> callback.onFailure(finalChannelName, finalDate, finalException));
             }
         } finally {
             synchronized (pendingRequests) { pendingRequests.remove(channelName + "_" + dateStr); }
