@@ -137,6 +137,19 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
     private long mExitTime = 0;
     private boolean onStopCalled;
 
+    // ========== 跨天辅助方法 ==========
+    private Date getAdjustedEndDateTime(Epginfo epg) {
+        if (epg == null || epg.enddateTime == null || epg.startdateTime == null) return null;
+        // 如果结束时间早于开始时间，说明跨天，结束日期加一天
+        if (epg.enddateTime.before(epg.startdateTime)) {
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(epg.enddateTime);
+            cal.add(Calendar.DAY_OF_MONTH, 1);
+            return cal.getTime();
+        }
+        return epg.enddateTime;
+    }
+
     // ========== Runnable ==========
     private final Runnable mHideChannelInfoRun = new Runnable() {
         @Override
@@ -557,7 +570,9 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             return;
         }
         epgListAdapter.setSelectedEpgIndex(position);
-        if (now.compareTo(epgItem.startdateTime) >= 0 && now.compareTo(epgItem.enddateTime) <= 0) {
+        // 使用修正后的结束时间
+        Date endAdjusted = getAdjustedEndDateTime(epgItem);
+        if (now.compareTo(epgItem.startdateTime) >= 0 && (endAdjusted != null && now.compareTo(endAdjusted) <= 0)) {
             playbackManager.playChannel(currentLiveChannelItem, false);
             epgListAdapter.setShiyiSelection(-1, false, timeFormat.format(date));
             showBottomEpg();
@@ -675,14 +690,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         int liveIndex = -1;
         Date now = new Date();
         for (int size = epgdata.size() - 1; size >= 0; size--) {
-            Epginfo epg = epgdata.get(size);
-            boolean isCurrent = false;
-            if (now.compareTo(epg.startdateTime) >= 0 && now.compareTo(epg.enddateTime) <= 0) {
-                isCurrent = true;
-            } else if (epg.enddateTime.compareTo(epg.startdateTime) < 0 && now.compareTo(epg.startdateTime) >= 0) {
-                isCurrent = true;
-            }
-            if (isCurrent) {
+            if (now.compareTo(epgdata.get(size).startdateTime) >= 0) {
                 liveIndex = size;
                 break;
             }
@@ -703,10 +711,14 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                 }
             }
         }
-        if (liveIndex >= 0 && now.compareTo(epgdata.get(liveIndex).enddateTime) <= 0) {
-            mEpgInfoGridView.setSelectedPosition(liveIndex);
-            mEpgInfoGridView.setSelection(liveIndex);
-            if (!shouldKeepShiyiHighlight) epgListAdapter.setSelectedEpgIndex(liveIndex);
+        if (liveIndex >= 0) {
+            Epginfo candidate = epgdata.get(liveIndex);
+            Date endAdjusted = getAdjustedEndDateTime(candidate);
+            if (endAdjusted != null && now.compareTo(endAdjusted) <= 0) {
+                mEpgInfoGridView.setSelectedPosition(liveIndex);
+                mEpgInfoGridView.setSelection(liveIndex);
+                if (!shouldKeepShiyiHighlight) epgListAdapter.setSelectedEpgIndex(liveIndex);
+            }
         }
     }
 
@@ -716,75 +728,46 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             tv_next_name.setText("");
             return;
         }
-
         String channelName = currentLiveChannelItem.getChannelName();
         Date selectedDate = epgDateAdapter.getSelectedIndex() < 0 ? new Date()
                 : epgDateAdapter.getData().get(epgDateAdapter.getSelectedIndex()).getDateParamVal();
         String dateStr = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD).format(selectedDate);
         ArrayList<Epginfo> currentEpgData = epgCacheHelper.getCachedEpg(channelName, dateStr);
-
-        boolean found = false;
-        Date now = new Date();
-
         if (currentEpgData != null && !currentEpgData.isEmpty()) {
-            // 1. 在当天 EPG 中匹配
-            for (int size = currentEpgData.size() - 1; size >= 0; size--) {
-                Epginfo epg = currentEpgData.get(size);
-                boolean isCurrent = false;
-                if (now.compareTo(epg.startdateTime) >= 0 && now.compareTo(epg.enddateTime) <= 0) {
-                    isCurrent = true;
-                } else if (epg.enddateTime.compareTo(epg.startdateTime) < 0 && now.compareTo(epg.startdateTime) >= 0) {
-                    isCurrent = true;
-                }
-                if (isCurrent) {
-                    updateBottomEpgWithEpg(epg, size, currentEpgData);
+            Date now = new Date();
+            boolean found = false;
+            for (Epginfo epg : currentEpgData) {
+                Date endAdjusted = getAdjustedEndDateTime(epg);
+                if (endAdjusted == null) continue;
+                if (now.compareTo(epg.startdateTime) >= 0 && now.compareTo(endAdjusted) <= 0) {
+                    tv_curr_time.setText(epg.start + " - " + epg.end);
+                    tv_curr_name.setText(epg.title);
+                    // 查找下一个节目
+                    int nextIndex = currentEpgData.indexOf(epg) + 1;
+                    if (nextIndex < currentEpgData.size()) {
+                        Epginfo next = currentEpgData.get(nextIndex);
+                        tv_next_time.setText(next.start + " - " + next.end);
+                        tv_next_name.setText(next.title);
+                    } else {
+                        tv_next_time.setText(LiveConstants.DEFAULT_START_TIME + " - " + LiveConstants.DEFAULT_END_TIME);
+                        tv_next_name.setText(LiveConstants.NO_INFO);
+                    }
                     found = true;
                     break;
                 }
             }
-
-            // 2. 如果没有匹配到，且当天第一个节目的开始时间 > 当前时间，则尝试显示昨天最后一个节目
-            if (!found && !currentEpgData.isEmpty()) {
-                Epginfo firstEpg = currentEpgData.get(0);
-                if (firstEpg.startdateTime != null && now.before(firstEpg.startdateTime)) {
-                    Calendar cal = Calendar.getInstance();
-                    cal.setTime(selectedDate);
-                    cal.add(Calendar.DAY_OF_MONTH, -1);
-                    Date yesterdayDate = cal.getTime();
-                    String yesterdayDateStr = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD).format(yesterdayDate);
-                    ArrayList<Epginfo> yesterdayEpgData = epgCacheHelper.getCachedEpg(channelName, yesterdayDateStr);
-                    if (yesterdayEpgData != null && !yesterdayEpgData.isEmpty()) {
-                        Epginfo lastEpg = yesterdayEpgData.get(yesterdayEpgData.size() - 1);
-                        updateBottomEpgWithEpg(lastEpg, yesterdayEpgData.size() - 1, yesterdayEpgData);
-                        found = true;
-                    }
-                }
+            if (!found) {
+                tv_curr_name.setText(LiveConstants.NO_PROGRAM);
+                tv_next_name.setText("");
             }
-        }
-
-        if (!found) {
+            epgdata = currentEpgData;
+            if (epgListAdapter != null) {
+                if (currentLiveChannelItem != null) epgListAdapter.CanBack(currentLiveChannelItem.getinclude_back());
+                epgListAdapter.setNewData(currentEpgData);
+            }
+        } else {
             tv_curr_name.setText(LiveConstants.NO_PROGRAM);
             tv_next_name.setText("");
-        }
-
-        // 同步 EPG 列表数据（如果需要）
-        if (epgListAdapter != null && currentEpgData != null) {
-            if (currentLiveChannelItem != null) epgListAdapter.CanBack(currentLiveChannelItem.getinclude_back());
-            epgListAdapter.setNewData(currentEpgData != null ? currentEpgData : new ArrayList<>());
-        }
-    }
-
-    // 辅助方法：更新底部栏节目信息
-    private void updateBottomEpgWithEpg(Epginfo epg, int index, List<Epginfo> fullList) {
-        tv_curr_time.setText(epg.start + " - " + epg.end);
-        tv_curr_name.setText(epg.title);
-        if (index != fullList.size() - 1) {
-            Epginfo next = fullList.get(index + 1);
-            tv_next_time.setText(next.start + " - " + next.end);
-            tv_next_name.setText(next.title);
-        } else {
-            tv_next_time.setText(LiveConstants.DEFAULT_START_TIME + " - " + LiveConstants.DEFAULT_END_TIME);
-            tv_next_name.setText(LiveConstants.NO_INFO);
         }
     }
 
@@ -1235,6 +1218,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                 break;
             case VideoView.STATE_ERROR:
             case VideoView.STATE_PLAYBACK_COMPLETED:
+                // 出错或播放完成时不做额外处理
                 break;
             default:
                 break;
