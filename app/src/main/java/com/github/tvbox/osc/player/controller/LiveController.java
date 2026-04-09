@@ -34,17 +34,15 @@ public class LiveController extends BaseController {
 
     public interface LiveControlListener {
         boolean singleTap(MotionEvent e);
-
         void longPress();
-
         void playStateChanged(int playState);
-
         void changeSource(int direction);
+        void showControlPanel();  // 新增
     }
 
-    private LiveController.LiveControlListener listener = null;
+    private LiveControlListener listener = null;
 
-    public void setListener(LiveController.LiveControlListener listener) {
+    public void setListener(LiveControlListener listener) {
         this.listener = listener;
     }
 
@@ -70,11 +68,9 @@ public class LiveController extends BaseController {
     @Override
     public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
         if (e1.getX() - e2.getX() > minFlingDistance && Math.abs(velocityX) > minFlingVelocity) {
-            listener.changeSource(-1);          //左滑
+            listener.showControlPanel();          //左滑
         } else if (e2.getX() - e1.getX() > minFlingDistance && Math.abs(velocityX) > minFlingVelocity) {
-            listener.changeSource(1);           //右滑
-        } else if (e1.getY() - e2.getY() > minFlingDistance && Math.abs(velocityY) > minFlingVelocity) {
-        } else if (e2.getY() - e1.getY() > minFlingDistance && Math.abs(velocityY) > minFlingVelocity) {
+            listener.showControlPanel();          //右滑
         }
         return false;
     }
