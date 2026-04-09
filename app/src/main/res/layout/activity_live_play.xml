@@ -692,4 +692,11 @@
             android:src="@drawable/v_back" />
     </LinearLayout>
 
+    <!-- 控制面板容器 -->
+    <FrameLayout
+        android:id="@+id/control_panel_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
 </FrameLayout>
