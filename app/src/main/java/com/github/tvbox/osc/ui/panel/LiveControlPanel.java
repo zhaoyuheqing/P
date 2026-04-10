@@ -111,10 +111,8 @@ public class LiveControlPanel {
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
                 int progress = seekBar.getProgress();
-                boolean isLiveChannel = playbackManager.getCurrentChannel() != null &&
-                        playbackManager.getCurrentChannel().getUrl().contains(LiveConstants.PLTV_FLAG);
-                // 如果是直播频道且未处于进度条模式，则自动开启
-                if (isLiveChannel && !playbackManager.isLive24hMode() && playbackManager.getPlaybackType() != 2) {
+                // 如果是纯直播且未开启模式，则先开启
+                if (playbackManager.getPlaybackType() == 0 && !playbackManager.isLive24hMode()) {
                     playbackManager.setLive24hMode(true);
                 }
                 if (playbackManager.isLive24hMode()) {
@@ -228,16 +226,16 @@ public class LiveControlPanel {
             tvCurrentTime.setText(formatTime(currentPos));
             tvTotalTime.setText(formatTime(duration));
         } else {
-            // 纯直播（未回放）—— 显示24小时窗口，但位置固定在当前时间，不自动移动
+            // 纯直播（未回放）—— 显示24小时窗口，进度条在最右侧（当前时间）
             long now = System.currentTimeMillis();
             long maxSec = LiveConstants.LIVE_REPLAY_WINDOW_MS / 1000;
             seekBar.setMax((int) maxSec);
-            // 当前时间对应 progress = 0（右端）
-            seekBar.setProgress(0);
+            seekBar.setProgress(0);  // 当前时间对应 progress=0
             SimpleDateFormat sdf = getTimeFormatter();
             tvCurrentTime.setText(sdf.format(new Date(now)));
             tvTotalTime.setText("直播");
-            // 不更新 EPG 信息，因为未回放
+            // 不显示 EPG 信息，因为没有回放点
+            tvCurrentEpg.setText("");
         }
 
         btnPlayPause.setText(playbackManager.isPlaying() ? "暂停" : "播放");
@@ -286,6 +284,10 @@ public class LiveControlPanel {
     }
 
     private void onSeekRelative(int seconds) {
+        // 如果是纯直播且未开启模式，则先开启
+        if (playbackManager.getPlaybackType() == 0 && !playbackManager.isLive24hMode()) {
+            playbackManager.setLive24hMode(true);
+        }
         pendingSeekOffset += seconds * 1000L;
         handler.removeCallbacks(pendingSeekRunnable);
         handler.postDelayed(pendingSeekRunnable, 300);
@@ -317,15 +319,6 @@ public class LiveControlPanel {
             playbackManager.seekTo((int) newPos);
             seekBar.setProgress((int) (newPos / 1000));
             tvCurrentTime.setText(formatTime(newPos));
-        } else {
-            // 纯直播未开启模式：应自动开启模式后执行
-            boolean isLiveChannel = playbackManager.getCurrentChannel() != null &&
-                    playbackManager.getCurrentChannel().getUrl().contains(LiveConstants.PLTV_FLAG);
-            if (isLiveChannel) {
-                playbackManager.setLive24hMode(true);
-                // 递归调用一次（此时已进入模式）
-                executePendingSeek();
-            }
         }
         // 重置自动隐藏
         handler.removeCallbacks(autoHideRunnable);
@@ -335,7 +328,10 @@ public class LiveControlPanel {
     // ========== 公共方法 ==========
     public void show() {
         if (isVisible) return;
-        // 不自动开启 isLive24hMode，只刷新UI
+        // 根据播放特征判断：如果是纯直播（未时移），则开启24h模式
+        if (playbackManager.getPlaybackType() == 0 && !playbackManager.isLive24hMode()) {
+            playbackManager.setLive24hMode(true);
+        }
         updateUI();
         container.setVisibility(View.VISIBLE);
         container.bringToFront();
