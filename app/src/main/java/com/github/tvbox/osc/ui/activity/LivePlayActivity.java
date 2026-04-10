@@ -584,6 +584,8 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                 return;
             }
             String shiyiRange = shiyiStartdate + "-" + shiyiEnddate;
+            // ========== 修改点：EPG 回放前重置直播进度条模式 ==========
+            playbackManager.setLive24hMode(false);
             playbackManager.playShiyi(shiyiRange);
             showBottomEpg();
             epgListAdapter.setShiyiSelection(position, true, timeFormat.format(date));
