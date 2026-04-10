@@ -46,19 +46,15 @@ public class LiveControlPanel {
     private long pendingSeekOffset = 0;
     private final Runnable pendingSeekRunnable = this::executePendingSeek;
 
-    // 直播进度条自动更新（仅在 isLive24hMode 为 true 时运行）
+    // 衔接防重复标志
+    private boolean isPreparingNextSegment = false;
+
+    // 每秒刷新定时器
     private final Runnable liveProgressUpdater = new Runnable() {
         @Override
         public void run() {
             if (!isVisible) return;
-            if (playbackManager.isLive24hMode()) {
-                long now = System.currentTimeMillis();
-                long liveTime = playbackManager.getCurrentLiveTime();
-                int progress = getProgressFromLiveTime(liveTime);
-                seekBar.setProgress(progress);
-                updateTimeDisplayForLive(liveTime, now);
-                updateEpgByTime(liveTime);
-            }
+            updateProgressAndTime();
             handler.postDelayed(this, 1000);
         }
     };
@@ -111,7 +107,7 @@ public class LiveControlPanel {
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
                 int progress = seekBar.getProgress();
-                // 如果是纯直播且未开启模式，则先开启
+                // 纯直播且未开启模式时，先开启
                 if (playbackManager.getPlaybackType() == 0 && !playbackManager.isLive24hMode()) {
                     playbackManager.setLive24hMode(true);
                 }
@@ -136,7 +132,8 @@ public class LiveControlPanel {
 
     // ========== 辅助方法 ==========
     private SimpleDateFormat getTimeFormatter() {
-        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
+        // 使用带秒的格式
+        SimpleDateFormat sdf = new SimpleDateFormat(LiveConstants.TIME_FORMAT_HHMMSS, Locale.getDefault());
         sdf.setTimeZone(TimeZone.getTimeZone("GMT+8"));
         return sdf;
     }
@@ -208,7 +205,7 @@ public class LiveControlPanel {
         btnSpeed.setText(String.format(Locale.US, "倍速 %.1fx", speed));
 
         if (playbackManager.isLive24hMode()) {
-            // 直播进度条模式（已进入回放）
+            // 已进入回放模式
             long now = System.currentTimeMillis();
             long liveTime = playbackManager.getCurrentLiveTime();
             long maxSec = LiveConstants.LIVE_REPLAY_WINDOW_MS / 1000;
@@ -221,20 +218,21 @@ public class LiveControlPanel {
             // 点播模式
             long duration = playbackManager.getDuration();
             long currentPos = playbackManager.getCurrentPosition();
-            seekBar.setMax((int) (duration / 1000));
-            seekBar.setProgress((int) (currentPos / 1000));
-            tvCurrentTime.setText(formatTime(currentPos));
-            tvTotalTime.setText(formatTime(duration));
+            if (duration > 0) {
+                seekBar.setMax((int) (duration / 1000));
+                seekBar.setProgress((int) (currentPos / 1000));
+                tvCurrentTime.setText(formatTime(currentPos));
+                tvTotalTime.setText(formatTime(duration));
+            }
         } else {
-            // 纯直播（未回放）—— 显示24小时窗口，进度条在最右侧（当前时间）
+            // 纯直播（未回放）—— 显示24小时窗口，进度条在最右侧，不开启模式
             long now = System.currentTimeMillis();
             long maxSec = LiveConstants.LIVE_REPLAY_WINDOW_MS / 1000;
             seekBar.setMax((int) maxSec);
-            seekBar.setProgress(0);  // 当前时间对应 progress=0
+            seekBar.setProgress(0);  // 最右端
             SimpleDateFormat sdf = getTimeFormatter();
             tvCurrentTime.setText(sdf.format(new Date(now)));
             tvTotalTime.setText("直播");
-            // 不显示 EPG 信息，因为没有回放点
             tvCurrentEpg.setText("");
         }
 
@@ -242,6 +240,39 @@ public class LiveControlPanel {
 
         SimpleDateFormat dateFormat = LiveConstants.getGMT8Formatter("MM月dd日 EEEE");
         tvDateWeek.setText(dateFormat.format(new Date()));
+    }
+
+    private void updateProgressAndTime() {
+        if (playbackManager.isLive24hMode()) {
+            // 直播回放模式：更新进度条、时间、EPG
+            long now = System.currentTimeMillis();
+            long liveTime = playbackManager.getCurrentLiveTime();
+            int progress = getProgressFromLiveTime(liveTime);
+            seekBar.setProgress(progress);
+            updateTimeDisplayForLive(liveTime, now);
+            updateEpgByTime(liveTime);
+            // 检查是否需要提前衔接下一段
+            checkAndSwitchToNextSegment(liveTime);
+        } else if (playbackManager.getPlaybackType() == 2) {
+            // 点播模式：更新进度条和时间
+            long duration = playbackManager.getDuration();
+            long currentPos = playbackManager.getCurrentPosition();
+            if (duration > 0) {
+                seekBar.setMax((int) (duration / 1000));
+                seekBar.setProgress((int) (currentPos / 1000));
+                tvCurrentTime.setText(formatTime(currentPos));
+                tvTotalTime.setText(formatTime(duration));
+            }
+        } else if (playbackManager.getPlaybackType() == 0) {
+            // 纯直播未回放：只更新时间（进度条不动）
+            long now = System.currentTimeMillis();
+            SimpleDateFormat sdf = getTimeFormatter();
+            tvCurrentTime.setText(sdf.format(new Date(now)));
+            tvTotalTime.setText("直播");
+            if (seekBar.getProgress() != 0) {
+                seekBar.setProgress(0);
+            }
+        }
     }
 
     private void updateTimeByProgress(int progressSec) {
@@ -254,6 +285,21 @@ public class LiveControlPanel {
             tvCurrentTime.setText(formatTime(progressMs));
             long totalMs = playbackManager.getDuration();
             tvTotalTime.setText(formatTime(totalMs));
+        }
+    }
+
+    // ========== 衔接检测（从远到近） ==========
+    private void checkAndSwitchToNextSegment(long liveTime) {
+        if (isPreparingNextSegment) return;
+        int idx = playbackManager.getCurrentSegmentIndex();
+        long segmentEnd = playbackManager.getCurrentSegmentEndTime();
+        if (idx <= 0 || segmentEnd <= 0) return;
+        long timeToEnd = segmentEnd - liveTime;
+        if (timeToEnd > 0 && timeToEnd <= LiveConstants.SEGMENT_SWITCH_THRESHOLD_MS) {
+            isPreparingNextSegment = true;
+            // 下一段的开始时间 = 当前段的结束时间
+            playbackManager.seekToLiveTimeSegment(segmentEnd, true);
+            handler.postDelayed(() -> isPreparingNextSegment = false, 3000);
         }
     }
 
@@ -284,7 +330,7 @@ public class LiveControlPanel {
     }
 
     private void onSeekRelative(int seconds) {
-        // 如果是纯直播且未开启模式，则先开启
+        // 纯直播且未开启模式时，先开启
         if (playbackManager.getPlaybackType() == 0 && !playbackManager.isLive24hMode()) {
             playbackManager.setLive24hMode(true);
         }
@@ -328,10 +374,7 @@ public class LiveControlPanel {
     // ========== 公共方法 ==========
     public void show() {
         if (isVisible) return;
-        // 根据播放特征判断：如果是纯直播（未时移），则开启24h模式
-        if (playbackManager.getPlaybackType() == 0 && !playbackManager.isLive24hMode()) {
-            playbackManager.setLive24hMode(true);
-        }
+        // 不自动开启 isLive24hMode，只刷新UI
         updateUI();
         container.setVisibility(View.VISIBLE);
         container.bringToFront();
