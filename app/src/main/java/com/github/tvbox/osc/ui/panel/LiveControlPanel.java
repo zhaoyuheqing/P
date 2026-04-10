@@ -12,8 +12,10 @@ import android.widget.TextView;
 import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.constant.LiveConstants;
 import com.github.tvbox.osc.player.controller.LivePlaybackManager;
+import com.github.tvbox.osc.util.EpgCacheHelper;
 
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
 
@@ -21,6 +23,7 @@ public class LiveControlPanel {
     private static final String TAG = "LiveControlPanel";
     private final Context context;
     private final LivePlaybackManager playbackManager;
+    private final EpgCacheHelper epgCacheHelper;
     private final Handler handler;
     private final FrameLayout container;
     private View panelView;
@@ -32,13 +35,16 @@ public class LiveControlPanel {
     private TextView btnPlayPause;
     private TextView btnRewind10;
     private TextView btnForward10;
+    private TextView tvDateWeek;
+    private TextView tvCurrentEpg;
     private boolean isVisible = false;
     private final Runnable autoHideRunnable = this::hide;
 
-    public LiveControlPanel(Context context, FrameLayout container, LivePlaybackManager playbackManager, Handler handler) {
+    public LiveControlPanel(Context context, FrameLayout container, LivePlaybackManager playbackManager, EpgCacheHelper epgCacheHelper, Handler handler) {
         this.context = context;
         this.container = container;
         this.playbackManager = playbackManager;
+        this.epgCacheHelper = epgCacheHelper;
         this.handler = handler;
         initView();
     }
@@ -54,6 +60,8 @@ public class LiveControlPanel {
         btnPlayPause = panelView.findViewById(R.id.control_play_pause);
         btnRewind10 = panelView.findViewById(R.id.control_rewind_10);
         btnForward10 = panelView.findViewById(R.id.control_forward_10);
+        tvDateWeek = panelView.findViewById(R.id.control_date_week);
+        tvCurrentEpg = panelView.findViewById(R.id.control_current_epg);
 
         btnPlayPause.setOnClickListener(v -> togglePlayPause());
         btnRewind10.setOnClickListener(v -> playbackManager.seekRelative(-10));
@@ -81,7 +89,9 @@ public class LiveControlPanel {
                 } else {
                     playbackManager.seekTo((int) targetPosMs);
                 }
-                hide();
+                // 重置自动隐藏计时器，不立即隐藏面板
+                handler.removeCallbacks(autoHideRunnable);
+                handler.postDelayed(autoHideRunnable, LiveConstants.CONTROL_PANEL_AUTO_HIDE_MS);
             }
         });
 
@@ -94,12 +104,11 @@ public class LiveControlPanel {
 
     public void show() {
         if (isVisible) return;
-        Log.d(TAG, "show() called, container visibility: " + container.getVisibility());
+        Log.d(TAG, "show() called");
         updateUI();
-        panelView.setVisibility(View.VISIBLE);
-        // 确保容器可见（可能被其他布局覆盖）
         container.setVisibility(View.VISIBLE);
         container.bringToFront();
+        panelView.setVisibility(View.VISIBLE);
         isVisible = true;
         handler.removeCallbacks(autoHideRunnable);
         handler.postDelayed(autoHideRunnable, LiveConstants.CONTROL_PANEL_AUTO_HIDE_MS);
@@ -149,6 +158,14 @@ public class LiveControlPanel {
         updateTimeDisplay(currentPosMs, rangeMs);
 
         btnPlayPause.setText(playbackManager.isPlaying() ? "暂停" : "播放");
+
+        // 更新日期和星期
+        SimpleDateFormat dateFormat = new SimpleDateFormat("MM月dd日 EEEE", Locale.CHINA);
+        tvDateWeek.setText(dateFormat.format(new Date()));
+
+        // 更新当前节目信息
+        String epgInfo = getCurrentEpgInfo();
+        tvCurrentEpg.setText(epgInfo);
     }
 
     private void updateTimeDisplay(long currentMs, long totalMs) {
@@ -213,5 +230,22 @@ public class LiveControlPanel {
         float newSpeed = speeds[index];
         playbackManager.setSpeed(newSpeed);
         btnSpeed.setText(String.format(Locale.US, "倍速 %.1fx", newSpeed));
+    }
+
+    private String getCurrentEpgInfo() {
+        if (playbackManager.getCurrentChannel() == null) return "暂无节目信息";
+        String channelName = playbackManager.getCurrentChannel().getChannelName();
+        if (epgCacheHelper == null) return "暂无节目信息";
+        SimpleDateFormat sdf = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD);
+        String today = sdf.format(new Date());
+        ArrayList<com.github.tvbox.osc.bean.Epginfo> epgList = epgCacheHelper.getCachedEpg(channelName, today);
+        if (epgList == null || epgList.isEmpty()) return "暂无节目信息";
+        Date now = new Date();
+        for (com.github.tvbox.osc.bean.Epginfo epg : epgList) {
+            if (now.after(epg.startdateTime) && now.before(epg.enddateTime)) {
+                return "正在播放：" + epg.title + " " + epg.start + "-" + epg.end;
+            }
+        }
+        return "暂无节目信息";
     }
 }
