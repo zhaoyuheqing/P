@@ -22,6 +22,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.TimeZone;
 
 import xyz.doikki.videoplayer.player.VideoView;
 
@@ -40,6 +41,11 @@ public class LivePlaybackManager {
     private int currentScale = 0;
     private int currentPlayerType = 0;
 
+    // 新增：直播24h模式标志（合并 forceLiveProgressMode 和 isDragSeekReplay）
+    private boolean isLive24hMode = false;
+    private int currentSegmentIndex = -1;
+    private long currentSegmentEndTime = 0;
+
     private PlaybackListener listener;
 
     private final Runnable timeoutChangeSourceRun = this::handleTimeoutChangeSource;
@@ -55,7 +61,7 @@ public class LivePlaybackManager {
         void onTimeoutReplay();
         void onShiyiModeChanged(boolean isShiyi, String timeRange);
         void onRequestChangeSource(int direction);
-        void showControlPanel();  // 新增
+        void showControlPanel();
     }
 
     public LivePlaybackManager(@NonNull Context context, @NonNull Handler handler, @NonNull VideoView videoView) {
@@ -115,6 +121,14 @@ public class LivePlaybackManager {
             case VideoView.STATE_PREPARING:
             case VideoView.STATE_ERROR:
             case VideoView.STATE_PLAYBACK_COMPLETED:
+                // 自动衔接下一段（仅当处于直播24h模式且未到最后一段）
+                if (isLive24hMode && currentSegmentIndex < LiveConstants.SEGMENT_COUNT - 1) {
+                    long nextStart = currentSegmentEndTime;
+                    if (nextStart < System.currentTimeMillis()) {
+                        seekToLiveTimeSegment(nextStart + 1000, true);
+                        return;
+                    }
+                }
                 startTimeoutTimer();
                 break;
         }
@@ -158,6 +172,8 @@ public class LivePlaybackManager {
     // ========== 播放核心 ==========
     public void playChannel(LiveChannelItem channel, boolean isChangeSource) {
         if (channel == null || videoView == null) return;
+        // 切换频道时重置24h模式
+        setLive24hMode(false);
         if (isChangeSource && channel.getSourceNum() == 1) {
             if (listener != null) listener.onCurrentChannelChanged(channel, true);
             return;
@@ -196,6 +212,7 @@ public class LivePlaybackManager {
     public void resetShiyiMode() {
         isShiyiMode = false;
         shiyiTime = null;
+        setLive24hMode(false);
         if (listener != null) listener.onShiyiModeChanged(false, null);
     }
 
@@ -233,7 +250,7 @@ public class LivePlaybackManager {
     }
 
     public String[] buildShiyiTimes(String targetDate, String startTime, String endTime) {
-        SimpleDateFormat sdf = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD_NUM);
+        SimpleDateFormat sdf = LiveConstants.getGMT8Formatter(LiveConstants.DATE_FORMAT_YMD_NUM);
         String startDateTime = targetDate + startTime.replace(":", "") + "30";
         String endDateTime;
         if (endTime.compareTo(startTime) < 0) {
@@ -255,7 +272,7 @@ public class LivePlaybackManager {
 
     public boolean isValidShiyiTime(String startTime, String endTime) {
         try {
-            SimpleDateFormat sdf = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMDHMS);
+            SimpleDateFormat sdf = LiveConstants.getGMT8Formatter(LiveConstants.DATE_FORMAT_YMDHMS);
             return sdf.parse(startTime).getTime() < sdf.parse(endTime).getTime();
         } catch (Exception e) { return false; }
     }
@@ -315,18 +332,30 @@ public class LivePlaybackManager {
     public int getCurrentScale() { return currentScale; }
     public int getCurrentPlayerType() { return currentPlayerType; }
 
-    // ========== 新增方法 ==========
+    // ========== 新增方法（直播24h模式） ==========
+    public void setLive24hMode(boolean enabled) {
+        this.isLive24hMode = enabled;
+        if (!enabled) {
+            currentSegmentIndex = -1;
+            currentSegmentEndTime = 0;
+        }
+    }
+    public boolean isLive24hMode() { return isLive24hMode; }
+
     public int getPlaybackType() {
-        if (isShiyiMode) return 1;
+        if (isShiyiMode && isLive24hMode) return 3;   // 直播进度条回放模式
+        if (isShiyiMode) return 1;                    // 普通回放（EPG）
         if (currentChannel != null && getDuration() > 0) return 2;
         return 0;
     }
 
     public long getDraggableRange() {
-        if (getPlaybackType() == 0) {
+        if (isLive24hMode()) {
             return LiveConstants.LIVE_REPLAY_WINDOW_MS;
-        } else {
+        } else if (getPlaybackType() == 2) {
             return getDuration();
+        } else {
+            return 0;
         }
     }
 
@@ -335,7 +364,7 @@ public class LivePlaybackManager {
         if (shiyiTime == null || !shiyiTime.contains("-")) return System.currentTimeMillis();
         try {
             String[] parts = shiyiTime.split("-");
-            SimpleDateFormat sdf = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMDHMS);
+            SimpleDateFormat sdf = LiveConstants.getGMT8Formatter(LiveConstants.DATE_FORMAT_YMDHMS);
             long start = sdf.parse(parts[0]).getTime();
             return start + getCurrentPosition();
         } catch (Exception e) {
@@ -343,24 +372,44 @@ public class LivePlaybackManager {
         }
     }
 
-    public void seekToLiveTime(long targetTimeMs) {
+    public void seekToLiveTimeSegment(long targetTimeMs, boolean enable24hMode) {
+        if (enable24hMode) setLive24hMode(true);
         long now = System.currentTimeMillis();
         long minTime = now - LiveConstants.LIVE_REPLAY_WINDOW_MS;
-        if (targetTimeMs < minTime) targetTimeMs = minTime;
-        if (targetTimeMs > now) targetTimeMs = now;
-        SimpleDateFormat sdf = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMDHMS);
-        String timeStr = sdf.format(targetTimeMs);
-        String timeRange = timeStr + "-" + sdf.format(now);
+        targetTimeMs = Math.max(minTime, Math.min(now, targetTimeMs));
+
+        long offsetFromNow = now - targetTimeMs;
+        int segmentIndex = (int) (offsetFromNow / LiveConstants.SEGMENT_DURATION_MS);
+        segmentIndex = Math.min(segmentIndex, LiveConstants.SEGMENT_COUNT - 1);
+
+        // 简化公式计算段起止
+        long segmentStart = now - (segmentIndex + 1) * LiveConstants.SEGMENT_DURATION_MS;
+        long segmentEnd = (segmentIndex == LiveConstants.SEGMENT_COUNT - 1) ? now
+                : now - segmentIndex * LiveConstants.SEGMENT_DURATION_MS;
+
+        long playStart = Math.max(segmentStart, Math.min(segmentEnd, targetTimeMs));
+
+        SimpleDateFormat sdf = LiveConstants.getGMT8Formatter(LiveConstants.DATE_FORMAT_YMDHMS);
+        String startStr = sdf.format(new Date(playStart));
+        String endStr = sdf.format(new Date(segmentEnd));
+        String timeRange = startStr + "-" + endStr;
+
+        currentSegmentIndex = segmentIndex;
+        currentSegmentEndTime = segmentEnd;
         playShiyi(timeRange);
     }
 
     public void seekRelative(int seconds) {
-        long step = seconds * 1000L;
-        if (getPlaybackType() == 0) {
-            long newLiveTime = getCurrentLiveTime() + step;
-            seekToLiveTime(newLiveTime);
+        if (isLive24hMode()) {
+            long currentLiveTime = getCurrentLiveTime();
+            long newTime = currentLiveTime + seconds * 1000L;
+            long now = System.currentTimeMillis();
+            long minTime = now - LiveConstants.LIVE_REPLAY_WINDOW_MS;
+            if (newTime < minTime) newTime = minTime;
+            if (newTime > now) newTime = now;
+            seekToLiveTimeSegment(newTime, true);
         } else {
-            long newPos = getCurrentPosition() + step;
+            long newPos = getCurrentPosition() + seconds * 1000L;
             if (newPos < 0) newPos = 0;
             long duration = getDuration();
             if (newPos > duration) newPos = duration;
@@ -369,16 +418,11 @@ public class LivePlaybackManager {
     }
 
     public void setSpeed(float speed) {
-        if (videoView != null) {
-            videoView.setSpeed(speed);
-        }
+        if (videoView != null) videoView.setSpeed(speed);
     }
 
     public float getCurrentSpeed() {
-        if (videoView != null) {
-            return videoView.getSpeed();
-        }
-        return 1.0f;
+        return videoView != null ? videoView.getSpeed() : 1.0f;
     }
 
     public boolean isPlaying() {
