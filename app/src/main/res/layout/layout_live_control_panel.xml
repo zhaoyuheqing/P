@@ -3,56 +3,48 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="@drawable/shape_live_bg_bottom"
-    android:gravity="center">
+    android:background="@drawable/shape_live_bg_bottom">
 
-    <!-- 按钮区域（垂直居中） -->
+    <!-- 操作按钮行（移到最顶部，实现视觉居中） -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="wrap_content"
         android:gravity="center"
-        android:orientation="vertical">
+        android:orientation="horizontal"
+        android:layout_marginTop="20dp"
+        android:layout_marginBottom="16dp">
 
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+        <TextView
+            android:id="@+id/control_rewind_10"
+            android:layout_width="46dp"
+            android:layout_height="46dp"
             android:gravity="center"
-            android:orientation="horizontal"
-            android:layout_marginBottom="16dp">
+            android:text="-10s"
+            android:textColor="@android:color/white"
+            android:textSize="14sp"
+            android:background="@drawable/bg_circle_button"
+            android:layout_marginEnd="20dp" />
 
-            <TextView
-                android:id="@+id/control_rewind_10"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:gravity="center"
-                android:text="-10s"
-                android:textColor="@android:color/white"
-                android:textSize="16sp"
-                android:background="@drawable/bg_circle_button"
-                android:layout_marginEnd="24dp" />
+        <TextView
+            android:id="@+id/control_play_pause"
+            android:layout_width="62dp"
+            android:layout_height="62dp"
+            android:gravity="center"
+            android:text="暂停"
+            android:textColor="@android:color/white"
+            android:textSize="18sp"
+            android:background="@drawable/bg_circle_button"
+            android:layout_marginEnd="20dp" />
 
-            <TextView
-                android:id="@+id/control_play_pause"
-                android:layout_width="72dp"
-                android:layout_height="72dp"
-                android:gravity="center"
-                android:text="暂停"
-                android:textColor="@android:color/white"
-                android:textSize="22sp"
-                android:background="@drawable/bg_circle_button"
-                android:layout_marginEnd="24dp" />
-
-            <TextView
-                android:id="@+id/control_forward_10"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:gravity="center"
-                android:text="+10s"
-                android:textColor="@android:color/white"
-                android:textSize="16sp"
-                android:background="@drawable/bg_circle_button" />
-        </LinearLayout>
+        <TextView
+            android:id="@+id/control_forward_10"
+            android:layout_width="46dp"
+            android:layout_height="46dp"
+            android:gravity="center"
+            android:text="+10s"
+            android:textColor="@android:color/white"
+            android:textSize="14sp"
+            android:background="@drawable/bg_circle_button" />
     </LinearLayout>
 
     <!-- 信息行：节目名 + 时间 -->
@@ -162,35 +154,37 @@
                 android:layout_marginTop="4dp" />
         </LinearLayout>
 
-        <!-- 倍速按钮 -->
-        <TextView
-            android:id="@+id/control_speed_btn"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:focusable="true"
-            android:gravity="center"
-            android:text="1.0x"
-            android:textColor="@android:color/white"
-            android:textSize="16sp"
-            android:background="@drawable/bg_button_focus"
+        <!-- 右侧按钮组（倍速 + 旋转） -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_alignParentRight="true"
-            android:layout_centerVertical="true" />
-
-        <!-- 旋转按钮（倍速按钮左侧） -->
-        <TextView
-            android:id="@+id/control_rotate_btn"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:focusable="true"
-            android:gravity="center"
-            android:text="旋转"
-            android:textColor="@android:color/white"
-            android:textSize="14sp"
-            android:background="@drawable/bg_button_focus"
-            android:layout_toLeftOf="@+id/control_speed_btn"
             android:layout_centerVertical="true"
-            android:layout_marginEnd="12dp" />
+            android:orientation="horizontal">
 
+            <TextView
+                android:id="@+id/control_speed_btn"
+                android:layout_width="41dp"
+                android:layout_height="41dp"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="1.0x"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                android:background="@drawable/bg_button_focus" />
+
+            <TextView
+                android:id="@+id/control_rotate_btn"
+                android:layout_width="41dp"
+                android:layout_height="41dp"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="旋转"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                android:background="@drawable/bg_button_focus"
+                android:layout_marginStart="12dp" />
+        </LinearLayout>
     </RelativeLayout>
 
 </LinearLayout>
