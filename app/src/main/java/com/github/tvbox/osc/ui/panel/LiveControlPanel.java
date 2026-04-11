@@ -1,5 +1,7 @@
 package com.github.tvbox.osc.ui.panel;
 
+import android.app.Activity;
+import android.content.pm.ActivityInfo;
 import android.content.Context;
 import android.os.Handler;
 import android.util.Log;
@@ -33,8 +35,9 @@ public class LiveControlPanel {
     private SeekBar seekBar;
     private TextView tvProgramName;
     private TextView btnSpeed;
-    private TextView tvCurrentTime;   // 左侧时间
-    private TextView tvTotalTime;     // 右侧时间
+    private TextView btnRotate;          // 新增旋转按钮
+    private TextView tvCurrentTime;
+    private TextView tvTotalTime;
     private TextView btnPlayPause;
     private TextView btnRewind10;
     private TextView btnForward10;
@@ -86,6 +89,7 @@ public class LiveControlPanel {
         seekBar = panelView.findViewById(R.id.control_seekbar);
         tvProgramName = panelView.findViewById(R.id.control_program_name);
         btnSpeed = panelView.findViewById(R.id.control_speed_btn);
+        btnRotate = panelView.findViewById(R.id.control_rotate_btn);
         tvCurrentTime = panelView.findViewById(R.id.control_current_time);
         tvTotalTime = panelView.findViewById(R.id.control_total_time);
         btnPlayPause = panelView.findViewById(R.id.control_play_pause);
@@ -98,6 +102,7 @@ public class LiveControlPanel {
         btnRewind10.setOnClickListener(v -> onSeekRelative(-10));
         btnForward10.setOnClickListener(v -> onSeekRelative(10));
         btnSpeed.setOnClickListener(v -> cycleSpeed());
+        btnRotate.setOnClickListener(v -> toggleScreenOrientation());
 
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -151,7 +156,6 @@ public class LiveControlPanel {
 
     private void updateTimeDisplayForLive(long targetTime, long now) {
         SimpleDateFormat sdf = getTimeFormatter();
-        // 左侧显示回放点时间，右侧显示当前时间
         tvCurrentTime.setText(sdf.format(new Date(targetTime)));
         tvTotalTime.setText(sdf.format(new Date(now)));
     }
@@ -236,7 +240,6 @@ public class LiveControlPanel {
             }
             tvCurrentEpg.setText("");
         } else if (playbackManager.getPlaybackType() == 1) {
-            // 普通回放（EPG触发的时移）
             long duration = playbackManager.getDuration();
             long currentPos = playbackManager.getCurrentPosition();
             if (duration > 0) {
@@ -253,7 +256,6 @@ public class LiveControlPanel {
                 tvCurrentTime.setText(sdf.format(new Date(now)));
                 tvTotalTime.setText("回放");
             }
-            // 直接显示预设的EPG信息
             tvCurrentEpg.setText(currentEpgInfo);
         } else {
             // 纯直播视觉模式
@@ -264,7 +266,7 @@ public class LiveControlPanel {
             SimpleDateFormat sdf = getTimeFormatter();
             tvCurrentTime.setText(sdf.format(new Date(now)));
             tvTotalTime.setText(sdf.format(new Date(now)));
-            tvCurrentEpg.setText("");
+            updateEpgByTime(now);
         }
 
         btnPlayPause.setText(playbackManager.isPlaying() ? "暂停" : "播放");
@@ -312,7 +314,6 @@ public class LiveControlPanel {
                 tvCurrentTime.setText(sdf.format(new Date(now)));
                 tvTotalTime.setText("回放");
             }
-            // EPG信息保持不变（不动态更新）
         } else if (playbackManager.getPlaybackType() == 0) {
             long now = System.currentTimeMillis();
             long maxSec = LiveConstants.LIVE_REPLAY_WINDOW_MS / 1000;
@@ -321,6 +322,7 @@ public class LiveControlPanel {
             SimpleDateFormat sdf = getTimeFormatter();
             tvCurrentTime.setText(sdf.format(new Date(now)));
             tvTotalTime.setText(sdf.format(new Date(now)));
+            updateEpgByTime(now);
         }
     }
 
@@ -376,6 +378,17 @@ public class LiveControlPanel {
         btnSpeed.setText(String.format(Locale.US, "%.1fx", newSpeed));
     }
 
+    private void toggleScreenOrientation() {
+        Activity activity = (Activity) context;
+        int currentOrientation = activity.getRequestedOrientation();
+        if (currentOrientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED ||
+            currentOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
+            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        } else {
+            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        }
+    }
+
     private void onSeekRelative(int seconds) {
         if (playbackManager.getPlaybackType() == 0 && !playbackManager.isLive24hMode()) {
             playbackManager.setLive24hMode(true);
@@ -421,19 +434,20 @@ public class LiveControlPanel {
         int action = event.getAction();
         int keyCode = event.getKeyCode();
 
-        // 返回键：隐藏面板
         if (keyCode == KeyEvent.KEYCODE_BACK) {
-            if (action == KeyEvent.ACTION_DOWN) {
-                hide();
-            }
+            if (action == KeyEvent.ACTION_DOWN) hide();
             return true;
         }
 
-        // 左右键处理（默认模式）
-        if (!isButtonFocusMode && (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+        // 左右键处理
+        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
             if (action == KeyEvent.ACTION_DOWN) {
-                startLongPressRepeat(keyCode);
-            } else if (action == KeyEvent.ACTION_UP) {
+                if (isButtonFocusMode) {
+                    moveFocus(keyCode == KeyEvent.KEYCODE_DPAD_LEFT ? View.FOCUS_LEFT : View.FOCUS_RIGHT);
+                } else {
+                    startLongPressRepeat(keyCode);
+                }
+            } else if (action == KeyEvent.ACTION_UP && !isButtonFocusMode) {
                 boolean wasLongPress = (longPressRunnable != null);
                 stopLongPressRepeat();
                 if (!wasLongPress) {
@@ -463,13 +477,17 @@ public class LiveControlPanel {
             return true;
         }
 
-        // 上下键：切换焦点模式或移动焦点
+        // 上下键
         if (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
             if (action == KeyEvent.ACTION_DOWN) {
                 if (!isButtonFocusMode) {
                     enterButtonFocusMode();
                 } else {
-                    moveFocus(keyCode == KeyEvent.KEYCODE_DPAD_UP ? View.FOCUS_UP : View.FOCUS_DOWN);
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                        exitButtonFocusMode();
+                    } else {
+                        moveFocus(View.FOCUS_DOWN);
+                    }
                 }
             }
             return true;
@@ -506,6 +524,7 @@ public class LiveControlPanel {
     // ========== 焦点管理 ==========
     private void enterButtonFocusMode() {
         isButtonFocusMode = true;
+        // 默认焦点给倍速按钮
         btnSpeed.requestFocus();
     }
 
