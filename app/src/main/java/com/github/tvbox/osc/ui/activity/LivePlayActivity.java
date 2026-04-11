@@ -295,16 +295,13 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         playbackManager = new LivePlaybackManager(this, mHandler, mVideoView);
         playbackManager.setListener(new LivePlaybackManager.PlaybackListener() {
             @Override
-            public boolean onSingleTap(MotionEvent e) {
-                if (controlPanel != null && controlPanel.isShowing()) {
-                    if (!controlPanel.isPointInside((int) e.getX(), (int) e.getY())) {
-                        controlPanel.hide();
-                    }
-                    return true;
-                }
-                return handleSingleTap(e);
-            }
-
+public boolean onSingleTap(MotionEvent e) {
+    if (controlPanel != null && controlPanel.isShowing()) {
+        controlPanel.hide();
+        return true;
+    }
+    return handleSingleTap(e);
+}
             @Override
             public void onLongPress() {
                 showSettingGroup();
