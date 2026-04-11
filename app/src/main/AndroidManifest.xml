@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="com.github.tvbox.osc">  <!-- 建议改个新包名 -->
+    package="com.github.tvbox.osc">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -31,12 +31,13 @@
             </intent-filter>
         </activity>
 
-        <!-- 播放 -->
+        <!-- 播放（添加 configChanges 防止旋转重建） -->
         <activity
             android:name=".ui.activity.LivePlayActivity"
             android:exported="false"
             android:screenOrientation="sensorLandscape"
-            android:supportsPictureInPicture="true" />
+            android:supportsPictureInPicture="true"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <!-- 设置（订阅源） -->
         <activity
