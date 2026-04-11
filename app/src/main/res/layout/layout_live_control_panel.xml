@@ -1,18 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:background="@drawable/shape_live_bg_bottom">
+    android:layout_height="match_parent">
 
-    <!-- 操作按钮行（移到最顶部，实现视觉居中） -->
+    <!-- 操作按钮组：全屏居中，无背景 -->
     <LinearLayout
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="center"
         android:gravity="center"
-        android:orientation="horizontal"
-        android:layout_marginTop="20dp"
-        android:layout_marginBottom="16dp">
+        android:orientation="horizontal">
 
         <TextView
             android:id="@+id/control_rewind_10"
@@ -47,144 +44,156 @@
             android:background="@drawable/bg_circle_button" />
     </LinearLayout>
 
-    <!-- 信息行：节目名 + 时间 -->
-    <RelativeLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingLeft="20dp"
-        android:paddingRight="20dp"
-        android:layout_marginBottom="8dp">
-
-        <TextView
-            android:id="@+id/control_program_name"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_alignParentLeft="true"
-            android:text="节目名称"
-            android:textColor="@android:color/white"
-            android:textSize="16sp"
-            android:textStyle="bold" />
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_alignParentRight="true"
-            android:orientation="horizontal">
-
-            <TextView
-                android:id="@+id/control_current_time"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="00:00:00"
-                android:textColor="@android:color/white"
-                android:textSize="14sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="/"
-                android:textColor="#CCCCCC"
-                android:textSize="14sp"
-                android:paddingLeft="4dp"
-                android:paddingRight="4dp" />
-
-            <TextView
-                android:id="@+id/control_total_time"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="00:00:00"
-                android:textColor="@android:color/white"
-                android:textSize="14sp"
-                android:textStyle="bold" />
-        </LinearLayout>
-    </RelativeLayout>
-
-    <!-- 进度条行 -->
+    <!-- 底部区域：原有渐变半透明背景 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingLeft="20dp"
-        android:paddingRight="20dp"
-        android:layout_marginBottom="8dp">
-
-        <SeekBar
-            android:id="@+id/control_seekbar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:thumbOffset="0dp"
-            android:paddingStart="0dp"
-            android:paddingEnd="0dp"
-            android:progressDrawable="@drawable/shape_player_control_vod_seek"
-            android:thumb="@drawable/shape_player_control_vod_seek_thumb"
-            android:max="100" />
-    </LinearLayout>
-
-    <!-- 底部行：日期 + EPG + 倍速按钮 + 旋转按钮 -->
-    <RelativeLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingLeft="20dp"
-        android:paddingRight="20dp"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:background="@drawable/shape_live_bg_bottom"
+        android:paddingTop="12dp"
         android:paddingBottom="12dp">
 
-        <LinearLayout
-            android:id="@+id/control_info_left"
-            android:layout_width="wrap_content"
+        <!-- 信息行：节目名 + 时间 -->
+        <RelativeLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_alignParentLeft="true"
-            android:orientation="vertical">
+            android:paddingLeft="20dp"
+            android:paddingRight="20dp"
+            android:layout_marginBottom="8dp">
 
             <TextView
-                android:id="@+id/control_date_week"
+                android:id="@+id/control_program_name"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="04月11日 周六"
-                android:textColor="#CCCCCC"
-                android:textSize="12sp" />
+                android:layout_alignParentLeft="true"
+                android:text="节目名称"
+                android:textColor="@android:color/white"
+                android:textSize="16sp"
+                android:textStyle="bold" />
 
-            <TextView
-                android:id="@+id/control_current_epg"
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="正在播放：节目名称 19:00-19:30"
-                android:textColor="@android:color/white"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:layout_marginTop="4dp" />
-        </LinearLayout>
+                android:layout_alignParentRight="true"
+                android:orientation="horizontal">
 
-        <!-- 右侧按钮组（倍速 + 旋转） -->
+                <TextView
+                    android:id="@+id/control_current_time"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="00:00:00"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="/"
+                    android:textColor="#CCCCCC"
+                    android:textSize="14sp"
+                    android:paddingLeft="4dp"
+                    android:paddingRight="4dp" />
+
+                <TextView
+                    android:id="@+id/control_total_time"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="00:00:00"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </RelativeLayout>
+
+        <!-- 进度条行 -->
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_alignParentRight="true"
-            android:layout_centerVertical="true"
-            android:orientation="horizontal">
+            android:paddingLeft="20dp"
+            android:paddingRight="20dp"
+            android:layout_marginBottom="8dp">
 
-            <TextView
-                android:id="@+id/control_speed_btn"
-                android:layout_width="41dp"
-                android:layout_height="41dp"
-                android:focusable="true"
-                android:gravity="center"
-                android:text="1.0x"
-                android:textColor="@android:color/white"
-                android:textSize="14sp"
-                android:background="@drawable/bg_button_focus" />
-
-            <TextView
-                android:id="@+id/control_rotate_btn"
-                android:layout_width="41dp"
-                android:layout_height="41dp"
-                android:focusable="true"
-                android:gravity="center"
-                android:text="旋转"
-                android:textColor="@android:color/white"
-                android:textSize="14sp"
-                android:background="@drawable/bg_button_focus"
-                android:layout_marginStart="12dp" />
+            <SeekBar
+                android:id="@+id/control_seekbar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:thumbOffset="0dp"
+                android:paddingStart="0dp"
+                android:paddingEnd="0dp"
+                android:progressDrawable="@drawable/shape_player_control_vod_seek"
+                android:thumb="@drawable/shape_player_control_vod_seek_thumb"
+                android:max="100" />
         </LinearLayout>
-    </RelativeLayout>
 
-</LinearLayout>
+        <!-- 底部行：日期 + EPG + 倍速按钮 + 旋转按钮 -->
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingLeft="20dp"
+            android:paddingRight="20dp"
+            android:paddingBottom="12dp">
+
+            <LinearLayout
+                android:id="@+id/control_info_left"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentLeft="true"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/control_date_week"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="04月11日 周六"
+                    android:textColor="#CCCCCC"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/control_current_epg"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="正在播放：节目名称 19:00-19:30"
+                    android:textColor="@android:color/white"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:layout_marginTop="4dp" />
+            </LinearLayout>
+
+            <!-- 右侧按钮组（倍速 + 旋转） -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:layout_centerVertical="true"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/control_speed_btn"
+                    android:layout_width="41dp"
+                    android:layout_height="41dp"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:text="1.0x"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp"
+                    android:background="@drawable/bg_button_focus" />
+
+                <TextView
+                    android:id="@+id/control_rotate_btn"
+                    android:layout_width="41dp"
+                    android:layout_height="41dp"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:text="旋转"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp"
+                    android:background="@drawable/bg_button_focus"
+                    android:layout_marginStart="12dp" />
+            </LinearLayout>
+        </RelativeLayout>
+
+    </LinearLayout>
+
+</FrameLayout>
