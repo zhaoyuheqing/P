@@ -140,8 +140,7 @@ public class LiveControlPanel {
             }
         });
 
-        // 关键：不消费任何触摸事件，让子视图（按钮、进度条）和 Activity 自然处理
-        // 这样空白区域的垂直滑动会穿透到底层（亮度/音量调节），单击空白区域由 Activity 的 onSingleTap 隐藏面板
+        // 不拦截触摸事件，让子视图和 Activity 自然处理（空白区域滑动穿透）
         panelView.setOnTouchListener((v, e) -> false);
 
         container.addView(panelView, new FrameLayout.LayoutParams(
@@ -463,6 +462,9 @@ public class LiveControlPanel {
                     updateUI();
                 }
             }
+            // 重置自动隐藏计时器
+            handler.removeCallbacks(autoHideRunnable);
+            handler.postDelayed(autoHideRunnable, LiveConstants.CONTROL_PANEL_AUTO_HIDE_MS);
             return true;
         }
 
@@ -478,6 +480,8 @@ public class LiveControlPanel {
                     togglePlayPause();
                 }
             }
+            handler.removeCallbacks(autoHideRunnable);
+            handler.postDelayed(autoHideRunnable, LiveConstants.CONTROL_PANEL_AUTO_HIDE_MS);
             return true;
         }
 
@@ -494,6 +498,8 @@ public class LiveControlPanel {
                     }
                 }
             }
+            handler.removeCallbacks(autoHideRunnable);
+            handler.postDelayed(autoHideRunnable, LiveConstants.CONTROL_PANEL_AUTO_HIDE_MS);
             return true;
         }
 
