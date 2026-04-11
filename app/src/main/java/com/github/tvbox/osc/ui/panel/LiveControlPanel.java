@@ -144,7 +144,7 @@ public class LiveControlPanel {
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
         panelView.setVisibility(View.GONE);
-        panelView.setOnClickListener(v -> hide());
+        // 移除 panelView.setOnClickListener，避免拦截滑动事件；隐藏面板由 LivePlayActivity.onSingleTap 处理
         Log.d(TAG, "Control panel initialized");
     }
 
