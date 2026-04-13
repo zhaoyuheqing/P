@@ -301,6 +301,7 @@
             android:layout_marginStart="@dimen/vs_60"
             android:layout_marginLeft="@dimen/vs_60"
             android:layout_marginTop="@dimen/vs_30"
+            android:layout_weight="1"
             android:layout_marginEnd="@dimen/vs_30"
             android:layout_marginRight="@dimen/vs_30"
             android:layout_marginBottom="@dimen/vs_30"
