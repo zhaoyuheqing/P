@@ -649,7 +649,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:paddingTop="@dimen/vs_5"
-                android:paddingStart="@dimen/vs_16"
+                android:paddingStart="@dimen/16dp"
                 android:paddingEnd="@dimen/vs_60"
                 android:visibility="gone">
 
