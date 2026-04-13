@@ -98,8 +98,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
     private TextView tv_channelnum;
     private TextView tv_curr_name;
     private TextView tv_curr_time;
-    private TextView tv_next_name;
-    private TextView tv_next_time;
+    // 已移除 tv_next_time 和 tv_next_name
 
     private LinearLayout mGroupEPG;
     private LinearLayout mDivLeft;
@@ -398,8 +397,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         tv_logo = findViewById(R.id.tv_logo);
         tv_curr_time = findViewById(R.id.tv_current_program_time);
         tv_curr_name = findViewById(R.id.tv_current_program_name);
-        tv_next_time = findViewById(R.id.tv_next_program_time);
-        tv_next_name = findViewById(R.id.tv_next_program_name);
+        // 已移除 tv_next_time 和 tv_next_name 的初始化
         mGroupEPG = findViewById(R.id.mGroupEPG);
         mDivRight = findViewById(R.id.mDivRight);
         mDivLeft = findViewById(R.id.mDivLeft);
@@ -545,18 +543,21 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
     // ========== 底部栏定时器 ==========
     private void startBottomBarUpdater() {
         if (bottomBarRunnable != null) return;
-        bottomBarRunnable = () -> {
-            if (tvBottomLayout.getVisibility() == View.VISIBLE) {
-                playbackManager.updateBottomBarInfo();
-                LivePlaybackManager.BottomBarInfo info = playbackManager.getBottomBarInfo();
-                tvDecode.setText(info.decodeType);
-                tvAudioTrack.setText(info.audioTrack);
-                tvCanShiyi.setVisibility(info.canShiyi ? View.VISIBLE : View.GONE);
-                tvCurrentProgramTime.setText(info.currentProgramTime);
-                tvRemainingTime.setText(info.remainingTime);
-                pbStaticProgress.setProgress(info.staticProgress);
+        bottomBarRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (tvBottomLayout.getVisibility() == View.VISIBLE) {
+                    playbackManager.updateBottomBarInfo();
+                    LivePlaybackManager.BottomBarInfo info = playbackManager.getBottomBarInfo();
+                    tvDecode.setText(info.decodeType);
+                    tvAudioTrack.setText(info.audioTrack);
+                    tvCanShiyi.setVisibility(info.canShiyi ? View.VISIBLE : View.GONE);
+                    tvCurrentProgramTime.setText(info.currentProgramTime);
+                    tvRemainingTime.setText(info.remainingTime);
+                    pbStaticProgress.setProgress(info.staticProgress);
+                }
+                bottomBarHandler.postDelayed(this, 1000);
             }
-            bottomBarHandler.postDelayed(this, 1000);
         };
         bottomBarHandler.post(bottomBarRunnable);
     }
@@ -790,7 +791,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
     private void showBottomEpg() {
         if (currentLiveChannelItem == null || currentLiveChannelItem.getChannelName() == null) {
             tv_curr_name.setText(LiveConstants.NO_PROGRAM);
-            tv_next_name.setText("");
             return;
         }
         String channelName = currentLiveChannelItem.getChannelName();
@@ -806,21 +806,12 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                 if (now.compareTo(epg.startdateTime) >= 0 && now.compareTo(epg.enddateTime) <= 0) {
                     tv_curr_time.setText(epg.start + " - " + epg.end);
                     tv_curr_name.setText(epg.title);
-                    if (size != currentEpgData.size() - 1) {
-                        Epginfo next = currentEpgData.get(size + 1);
-                        tv_next_time.setText(next.start + " - " + next.end);
-                        tv_next_name.setText(next.title);
-                    } else {
-                        tv_next_time.setText(LiveConstants.DEFAULT_START_TIME + " - " + LiveConstants.DEFAULT_END_TIME);
-                        tv_next_name.setText(LiveConstants.NO_INFO);
-                    }
                     found = true;
                     break;
                 }
             }
             if (!found) {
                 tv_curr_name.setText(LiveConstants.NO_PROGRAM);
-                tv_next_name.setText("");
             }
             epgdata = currentEpgData;
             if (epgListAdapter != null) {
@@ -829,7 +820,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             }
         } else {
             tv_curr_name.setText(LiveConstants.NO_PROGRAM);
-            tv_next_name.setText("");
         }
     }
 
@@ -1111,7 +1101,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
             tv_source.setText("0/0");
             tv_size.setText("");
             tv_curr_name.setText("请先添加直播源");
-            tv_next_name.setText("");
         } else {
             int lastGroup = -1, lastChannel = -1;
             Intent intent = getIntent();
