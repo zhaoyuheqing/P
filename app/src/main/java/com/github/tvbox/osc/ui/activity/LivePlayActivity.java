@@ -140,6 +140,12 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
     // 底部栏新控件
     private ProgressBar pbStaticProgress;
     private TextView tvDecode, tvAudioTrack, tvCanShiyi, tvRemainingTime, tvCurrentProgramTime;
+
+    // 跑马灯控件（原有，需显式声明）
+    private com.github.tvbox.osc.ui.tv.widget.MarqueeTextView tv_channel_name;
+    private com.github.tvbox.osc.ui.tv.widget.MarqueeTextView tv_current_program_name;
+    private com.github.tvbox.osc.ui.tv.widget.MarqueeTextView tv_next_program_name;
+
     private Handler bottomBarHandler = new Handler();
     private Runnable bottomBarRunnable;
 
@@ -341,11 +347,8 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                     }
                 }
                 showChannelInfo();
-                // 切换频道后，更新底部栏静态信息（解码方式、可时移标签等）
                 updateBottomBarStaticInfo();
-                // 根据播放类型重新设置静态进度条可见性
                 updateStaticProgressVisibility();
-                // 启动跑马灯滚动
                 startMarquee();
             }
 
@@ -368,13 +371,11 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                     llSeekBar.setVisibility(View.VISIBLE);
                     stopBottomBarUpdater();
                 } else {
-                    // 退出时移模式，根据播放类型决定是否显示静态进度条
                     updateStaticProgressVisibility();
                     llSeekBar.setVisibility(View.GONE);
                     if (playbackManager.getPlaybackType() == 0) {
                         startBottomBarUpdater();
                     }
-                    // 更新底部栏信息（例如解码方式可能未变，但可时移标签可能变化）
                     updateBottomBarStaticInfo();
                 }
             }
@@ -418,6 +419,11 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         mEpgDateGridView = findViewById(R.id.mEpgDateGridView);
         mEpgInfoGridView = findViewById(R.id.mEpgInfoGridView);
 
+        // 跑马灯控件初始化
+        tv_channel_name = findViewById(R.id.tv_channel_name);
+        tv_current_program_name = findViewById(R.id.tv_current_program_name);
+        tv_next_program_name = findViewById(R.id.tv_next_program_name);
+
         // 底部栏新控件
         pbStaticProgress = findViewById(R.id.pb_static_progress);
         tvDecode = findViewById(R.id.tv_decode);
@@ -426,10 +432,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         tvRemainingTime = findViewById(R.id.tv_remaining_time);
         tvCurrentProgramTime = findViewById(R.id.tv_current_program_time);
 
-        // 初始化底部栏静态信息（解码方式、音频轨道、可时移标签）
         updateBottomBarStaticInfo();
-
-        // 初始设置静态进度条可见性
         updateStaticProgressVisibility();
 
         // 设置面板
@@ -462,7 +465,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                     refreshAfterPlayerTypeChange();
                     Toast.makeText(LivePlayActivity.this, "解码方式已应用", Toast.LENGTH_SHORT).show();
                     if (settingsPanel != null && settingsPanel.isShowing()) settingsPanel.refreshCurrentGroup();
-                    // 解码方式变化后，更新底部栏显示
                     updateBottomBarStaticInfo();
                 } catch (Exception e) {
                     Toast.makeText(LivePlayActivity.this, "设置失败", Toast.LENGTH_SHORT).show();
@@ -554,25 +556,20 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
 
     // ========== 底部栏相关方法 ==========
     private void updateBottomBarStaticInfo() {
-        // 解码方式（根据当前播放器类型获取真实名称）
         String decodeType = PlayerHelper.getPlayerName(playbackManager.getCurrentPlayerType());
         tvDecode.setText(decodeType);
-        // 音频轨道（暂时固定，后续可扩展）
         tvAudioTrack.setText("立体声");
-        // 可时移标签（根据频道是否支持时移）
         boolean canShiyi = currentLiveChannelItem != null && currentLiveChannelItem.getinclude_back();
         tvCanShiyi.setVisibility(canShiyi ? View.VISIBLE : View.GONE);
     }
 
     private void updateStaticProgressVisibility() {
-        // 静态进度条和剩余时间仅在纯直播模式（type==0）且未时移时显示
         boolean show = (playbackManager.getPlaybackType() == 0) && !playbackManager.isShiyiMode();
         pbStaticProgress.setVisibility(show ? View.VISIBLE : View.GONE);
         tvRemainingTime.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     private void startMarquee() {
-        // 启动跑马灯滚动
         if (tv_channel_name != null) tv_channel_name.setSelected(true);
         if (tv_current_program_name != null) tv_current_program_name.setSelected(true);
         if (tv_next_program_name != null) tv_next_program_name.setSelected(true);
@@ -582,16 +579,12 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         if (bottomBarRunnable != null) return;
         bottomBarRunnable = () -> {
             if (tvBottomLayout.getVisibility() == View.VISIBLE && playbackManager.getPlaybackType() == 0 && !playbackManager.isShiyiMode()) {
-                // 仅更新静态进度条进度和剩余时间
                 playbackManager.updateBottomBarInfo();
                 LivePlaybackManager.BottomBarInfo info = playbackManager.getBottomBarInfo();
-                // 更新静态进度条进度
                 pbStaticProgress.setProgress(info.staticProgress);
-                // 更新剩余时间（如果内容变化）
                 if (!tvRemainingTime.getText().equals(info.remainingTime)) {
                     tvRemainingTime.setText(info.remainingTime);
                 }
-                // 更新节目起止时间（如果内容变化，且不是跑马灯控件，可以随时更新）
                 if (!tvCurrentProgramTime.getText().equals(info.currentProgramTime)) {
                     tvCurrentProgramTime.setText(info.currentProgramTime);
                 }
@@ -771,11 +764,9 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         mHandler.removeCallbacks(mHideChannelInfoRun);
         mHandler.postDelayed(mHideChannelInfoRun, LiveConstants.AUTO_HIDE_CHANNEL_INFO_MS);
         mHandler.postDelayed(mUpdateLayout, 255);
-        // 启动底部栏定时器（仅用于静态进度条和剩余时间）
         if (playbackManager.getPlaybackType() == 0 && !playbackManager.isShiyiMode()) {
             startBottomBarUpdater();
         }
-        // 启动跑马灯
         startMarquee();
     }
 
@@ -872,7 +863,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                 if (currentLiveChannelItem != null) epgListAdapter.CanBack(currentLiveChannelItem.getinclude_back());
                 epgListAdapter.setNewData(currentEpgData);
             }
-            // 更新底部栏节目起止时间（如果显示）
             if (currentEpgData.size() > 0 && playbackManager.getPlaybackType() == 0 && !playbackManager.isShiyiMode()) {
                 Epginfo currentEpg = null;
                 for (Epginfo epg : currentEpgData) {
@@ -882,8 +872,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                     }
                 }
                 if (currentEpg != null) {
-                    String timeRange = currentEpg.start + " - " + currentEpg.end;
-                    tvCurrentProgramTime.setText(timeRange);
+                    tvCurrentProgramTime.setText(currentEpg.start + " - " + currentEpg.end);
                 }
             }
         } else {
