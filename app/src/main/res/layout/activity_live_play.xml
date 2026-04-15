@@ -609,7 +609,7 @@
                 android:layout_weight="1"
                 android:orientation="horizontal"
                 android:paddingBottom="@dimen/vs_5"
-                android:paddingEnd="@dimen/vs_60"
+                android:paddingEnd="@dimen/vs_60">
 
                 
                 <!-- 当前节目名称：权重改为 3 -->
