@@ -336,7 +336,7 @@
                     android:layout_gravity="bottom|center"
                     android:layout_marginEnd="@dimen/vs_10"
                     android:fontFamily="sans-serif"
-                    android:gravity="center"
+                    android:gravity="left"
                     android:shadowColor="@color/color_FF000000"
                     android:shadowDx="0"
                     android:shadowDy="0"
