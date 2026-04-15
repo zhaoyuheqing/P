@@ -381,26 +381,6 @@
                     android:textSize="@dimen/ts_36"
                     android:textStyle="bold" />
 
-                <!-- 当前节目名称：权重改为 3 -->
-                <com.github.tvbox.osc.ui.tv.widget.MarqueeTextView
-                    android:id="@+id/tv_current_program_name"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="bottom|left"
-                    android:layout_weight="5"
-                    android:ellipsize="marquee"
-                    android:fontFamily="sans-serif"
-                    android:gravity="left"
-                    android:paddingRight="@dimen/vs_20"
-                    android:shadowColor="@color/color_FF000000"
-                    android:shadowDx="0"
-                    android:shadowDy="0"
-                    android:shadowRadius="5"
-                    android:singleLine="true"
-                    android:text="No information"
-                    android:textColor="@color/color_FFFFFF"
-                    android:textSize="@dimen/ts_36"
-                    android:textStyle="bold" />
 
                 <!-- 系统时间 -->
                 <TextView
@@ -672,6 +652,27 @@
                     android:textColor="@color/color_FFFFFF"
                     android:textSize="@dimen/ts_20"
                     android:textStyle="normal" />
+                
+                <!-- 当前节目名称：权重改为 3 -->
+                <com.github.tvbox.osc.ui.tv.widget.MarqueeTextView
+                    android:id="@+id/tv_current_program_name"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|left"
+                    android:layout_weight="5"
+                    android:ellipsize="marquee"
+                    android:fontFamily="sans-serif"
+                    android:gravity="left"
+                    android:paddingRight="@dimen/vs_20"
+                    android:shadowColor="@color/color_FF000000"
+                    android:shadowDx="0"
+                    android:shadowDy="0"
+                    android:shadowRadius="5"
+                    android:singleLine="true"
+                    android:text="No information"
+                    android:textColor="@color/color_FFFFFF"
+                    android:textSize="@dimen/ts_36"
+                    android:textStyle="bold" />
 
             </LinearLayout>
 
