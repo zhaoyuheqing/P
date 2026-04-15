@@ -602,7 +602,7 @@
 
                 <TextView
                     android:id="@+id/tv_remaining_time"
-                    android:layout_width="wrap_content"
+                    android:layout_width="@dimen/vs_160"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center|right"
                     android:fontFamily="sans-serif-condensed"
