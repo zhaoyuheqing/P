@@ -139,10 +139,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
 
     // 底部栏新控件
     private ProgressBar pbStaticProgress;
-    private TextView tvDecode, tvAudioTrack, tvCanShiyi, tvRemainingTime, tvCurrentProgramTime;
-
-    private Handler bottomBarHandler = new Handler();
-    private Runnable bottomBarRunnable;
+    private TextView tvDecode, tvAudioTrack, tvCanShiyi, tvRemainingTime;
 
     boolean mIsDragging;
     boolean isVOD = false;
@@ -162,7 +159,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                             public void onAnimationEnd(Animator animation) {
                                 tvBottomLayout.setVisibility(View.INVISIBLE);
                                 tvBottomLayout.clearAnimation();
-                                stopBottomBarUpdater();
                             }
                         });
             }
@@ -205,6 +201,12 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                 int pos = (int) playbackManager.getCurrentPosition();
                 mCurrentTime.setText(stringForTimeVod(pos));
                 mSeekBar.setProgress(pos);
+            }
+            // 更新静态进度条和剩余时间（仅在纯直播且未时移时）
+            if (tvBottomLayout.getVisibility() == View.VISIBLE
+                    && playbackManager.getPlaybackType() == 0
+                    && !playbackManager.isShiyiMode()) {
+                updateStaticProgressAndRemaining();
             }
         }
     };
@@ -303,7 +305,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
 
         mVideoView = findViewById(R.id.mVideoView);
         playbackManager = new LivePlaybackManager(this, mHandler, mVideoView);
-        playbackManager.setEpgCacheHelper(epgCacheHelper);
         playbackManager.setListener(new LivePlaybackManager.PlaybackListener() {
             @Override
             public boolean onSingleTap(MotionEvent e) {
@@ -363,13 +364,9 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                 if (isShiyi) {
                     pbStaticProgress.setVisibility(View.GONE);
                     llSeekBar.setVisibility(View.VISIBLE);
-                    stopBottomBarUpdater();
                 } else {
                     updateStaticProgressVisibility();
                     llSeekBar.setVisibility(View.GONE);
-                    if (playbackManager.getPlaybackType() == 0) {
-                        startBottomBarUpdater();
-                    }
                     updateBottomBarStaticInfo();
                 }
             }
@@ -419,7 +416,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         tvAudioTrack = findViewById(R.id.tv_audio_track);
         tvCanShiyi = findViewById(R.id.tv_can_shiyi);
         tvRemainingTime = findViewById(R.id.tv_remaining_time);
-        tvCurrentProgramTime = findViewById(R.id.tv_current_program_time);
 
         updateBottomBarStaticInfo();
         updateStaticProgressVisibility();
@@ -558,29 +554,44 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         tvRemainingTime.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
-    private void startBottomBarUpdater() {
-        if (bottomBarRunnable != null) return;
-        bottomBarRunnable = () -> {
-            if (tvBottomLayout.getVisibility() == View.VISIBLE && playbackManager.getPlaybackType() == 0 && !playbackManager.isShiyiMode()) {
-                playbackManager.updateBottomBarInfo();
-                LivePlaybackManager.BottomBarInfo info = playbackManager.getBottomBarInfo();
-                pbStaticProgress.setProgress(info.staticProgress);
-                if (!tvRemainingTime.getText().equals(info.remainingTime)) {
-                    tvRemainingTime.setText(info.remainingTime);
-                }
-                if (!tvCurrentProgramTime.getText().equals(info.currentProgramTime)) {
-                    tvCurrentProgramTime.setText(info.currentProgramTime);
-                }
+    private void updateStaticProgressAndRemaining() {
+        if (currentLiveChannelItem == null || epgCacheHelper == null) {
+            pbStaticProgress.setProgress(0);
+            tvRemainingTime.setText("剩余 --:--:--");
+            return;
+        }
+        String channelName = currentLiveChannelItem.getChannelName();
+        Date now = new Date();
+        SimpleDateFormat sdf = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD);
+        String today = sdf.format(now);
+        ArrayList<Epginfo> epgList = epgCacheHelper.getCachedEpg(channelName, today);
+        if (epgList == null || epgList.isEmpty()) {
+            pbStaticProgress.setProgress(0);
+            tvRemainingTime.setText("剩余 --:--:--");
+            return;
+        }
+        Epginfo currentEpg = null;
+        for (Epginfo epg : epgList) {
+            if (now.after(epg.startdateTime) && now.before(epg.enddateTime)) {
+                currentEpg = epg;
+                break;
             }
-            bottomBarHandler.postDelayed(bottomBarRunnable, 1000);
-        };
-        bottomBarHandler.post(bottomBarRunnable);
-    }
-
-    private void stopBottomBarUpdater() {
-        if (bottomBarRunnable != null) {
-            bottomBarHandler.removeCallbacks(bottomBarRunnable);
-            bottomBarRunnable = null;
+        }
+        if (currentEpg != null) {
+            long totalMs = currentEpg.enddateTime.getTime() - currentEpg.startdateTime.getTime();
+            long elapsedMs = now.getTime() - currentEpg.startdateTime.getTime();
+            int progress = totalMs > 0 ? (int) (elapsedMs * 1000 / totalMs) : 0;
+            if (progress < 0) progress = 0;
+            if (progress > 1000) progress = 1000;
+            pbStaticProgress.setProgress(progress);
+            long remainingMs = currentEpg.enddateTime.getTime() - now.getTime();
+            if (remainingMs < 0) remainingMs = 0;
+            long remainingSec = remainingMs / 1000;
+            tvRemainingTime.setText(String.format("剩余 %02d:%02d:%02d",
+                    remainingSec / 3600, (remainingSec % 3600) / 60, remainingSec % 60));
+        } else {
+            pbStaticProgress.setProgress(0);
+            tvRemainingTime.setText("剩余 --:--:--");
         }
     }
 
@@ -747,9 +758,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
         mHandler.removeCallbacks(mHideChannelInfoRun);
         mHandler.postDelayed(mHideChannelInfoRun, LiveConstants.AUTO_HIDE_CHANNEL_INFO_MS);
         mHandler.postDelayed(mUpdateLayout, 255);
-        if (playbackManager.getPlaybackType() == 0 && !playbackManager.isShiyiMode()) {
-            startBottomBarUpdater();
-        }
     }
 
     private void toggleChannelInfo() {
@@ -1295,7 +1303,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                     isVOD = false;
                     llSeekBar.setVisibility(View.GONE);
                 }
-                // 播放器准备就绪后重新评估静态进度条可见性
                 updateStaticProgressVisibility();
                 break;
             case VideoView.STATE_ERROR:
@@ -1434,7 +1441,6 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
     }
     @Override protected void onDestroy() {
         super.onDestroy();
-        stopBottomBarUpdater();
         if (playbackManager != null) playbackManager.release();
         if (epgCacheHelper != null) epgCacheHelper.destroy();
         if (settingsPanel != null) settingsPanel.destroy();
