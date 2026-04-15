@@ -646,7 +646,7 @@
                     android:shadowDx="0"
                     android:shadowDy="0"
                     android:shadowRadius="3"
-                    android:singleLine="true"
+                    android:singleLine="true"/>
             <!-- 当前节目名称：权重改为 3 -->
                 <com.github.tvbox.osc.ui.tv.widget.MarqueeTextView
                     android:id="@+id/tv_current_program_name"
