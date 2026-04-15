@@ -387,7 +387,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="bottom|left"
-                    android:layout_weight="3"
+                    android:layout_weight="1"
                     android:ellipsize="marquee"
                     android:fontFamily="sans-serif"
                     android:gravity="left"
@@ -447,7 +447,7 @@
             <!-- 第三行：信息行（分辨率、源、解码、音轨、时移标签 + 当前节目时间段 + 剩余时间） -->
             <LinearLayout
                 android:id="@+id/ll_line2"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:orientation="horizontal"
