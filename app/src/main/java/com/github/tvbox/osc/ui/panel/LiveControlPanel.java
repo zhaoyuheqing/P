@@ -346,7 +346,7 @@ public class LiveControlPanel {
         if (isPreparingNextSegment) return;
         int idx = playbackManager.getCurrentSegmentIndex();
         long segmentEnd = playbackManager.getCurrentSegmentEndTime();
-        if (idx <= 0 || segmentEnd <= 0) return;
+        if (idx < 0 || segmentEnd <= 0) return;
         long timeToEnd = segmentEnd - liveTime;
         if (timeToEnd > 0 && timeToEnd <= LiveConstants.SEGMENT_SWITCH_THRESHOLD_MS) {
             isPreparingNextSegment = true;
