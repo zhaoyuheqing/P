@@ -323,13 +323,14 @@ public class LiveControlPanel {
             if (seekBar.getMax() != (int) maxSec) seekBar.setMax((int) maxSec);
             if (seekBar.getProgress() != (int) maxSec) seekBar.setProgress((int) maxSec);
             SimpleDateFormat sdf = getTimeFormatter();
-            updateTimeDisplayForLive(liveTime, now);
+            tvCurrentTime.setText(sdf.format(new Date(now)));
+            tvTotalTime.setText(sdf.format(new Date(now)));
             updateEpgByTime(now);
         }
     }
 
     private void updateTimeByProgress(int progressSec) {
-        if (playbackManager.isLive24hMode()) {
+        if (playbackManager.isLive24hMode() || playbackManager.getPlaybackType() == 0) {
             long targetTime = getLiveTimeFromProgress(progressSec);
             long now = System.currentTimeMillis();
             updateTimeDisplayForLive(targetTime, now);
