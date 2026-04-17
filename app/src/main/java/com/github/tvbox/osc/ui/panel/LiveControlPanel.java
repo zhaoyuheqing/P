@@ -323,8 +323,7 @@ public class LiveControlPanel {
             if (seekBar.getMax() != (int) maxSec) seekBar.setMax((int) maxSec);
             if (seekBar.getProgress() != (int) maxSec) seekBar.setProgress((int) maxSec);
             SimpleDateFormat sdf = getTimeFormatter();
-            tvCurrentTime.setText(sdf.format(new Date(now)));
-            tvTotalTime.setText(sdf.format(new Date(now)));
+            updateTimeDisplayForLive(liveTime, now);
             updateEpgByTime(now);
         }
     }
