@@ -117,8 +117,6 @@ public class LivePlaybackManager {
                 cancelAllTimeouts();
                 currentChangeSourceTimes = 0;
                 break;
-            case VideoView.STATE_BUFFERING:
-            case VideoView.STATE_PREPARING:
             case VideoView.STATE_ERROR:
             case VideoView.STATE_PLAYBACK_COMPLETED:
                 if (isLive24hMode && currentSegmentIndex > 0) {
