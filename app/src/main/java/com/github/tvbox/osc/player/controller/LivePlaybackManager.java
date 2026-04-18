@@ -117,9 +117,11 @@ public class LivePlaybackManager {
                 cancelAllTimeouts();
                 currentChangeSourceTimes = 0;
                 break;
+            case VideoView.STATE_BUFFERING:
+            case VideoView.STATE_PREPARING:
             case VideoView.STATE_ERROR:
             case VideoView.STATE_PLAYBACK_COMPLETED:
-                if (isLive24hMode && currentSegmentIndex > 0) {
+                if (isLive24hMode && currentSegmentIndex < LiveConstants.SEGMENT_COUNT - 1) {
                     long nextStart = currentSegmentEndTime;
                     if (nextStart < System.currentTimeMillis()) {
                         seekToLiveTimeSegment(nextStart + 1000, true);
