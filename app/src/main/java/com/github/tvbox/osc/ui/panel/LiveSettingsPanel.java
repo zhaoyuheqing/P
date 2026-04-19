@@ -89,7 +89,8 @@ public class LiveSettingsPanel {
         itemsArrayList.add(new ArrayList<>(Arrays.asList("默认", "16:9", "4:3", "填充", "原始", "裁剪")));
         itemsArrayList.add(new ArrayList<>(Arrays.asList("系统", "ijk硬解", "ijk软解", "exo")));
         itemsArrayList.add(new ArrayList<>(Arrays.asList("关", "5s", "10s", "15s", "20s", "25s", "30s")));
-        itemsArrayList.add(new ArrayList<>(Arrays.asList("显示时间", "显示网速", "换台反转", "跨选分类", "关闭密码")));
+        // 偏好设置：显示时间、显示网速、换台反转、跨选分类、关闭密码、时移后继续下一段
+        itemsArrayList.add(new ArrayList<>(Arrays.asList("显示时间", "显示网速", "换台反转", "跨选分类", "关闭密码", "时移后继续下一段")));
         itemsArrayList.add(new ArrayList<>(Arrays.asList("列表历史")));
         itemsArrayList.add(new ArrayList<>(Arrays.asList("确定退出")));
 
@@ -120,16 +121,19 @@ public class LiveSettingsPanel {
         }
         if (settingGroups.size() > 4) {
             List<LiveSettingItem> prefItems = settingGroups.get(4).getLiveSettingItems();
-            if (!prefItems.isEmpty())
+            if (!prefItems.isEmpty()) {
                 prefItems.get(0).setItemSelected(Hawk.get(HawkConfig.LIVE_SHOW_TIME, false));
-            if (prefItems.size() > 1)
-                prefItems.get(1).setItemSelected(Hawk.get(HawkConfig.LIVE_SHOW_NET_SPEED, false));
-            if (prefItems.size() > 2)
-                prefItems.get(2).setItemSelected(Hawk.get(HawkConfig.LIVE_CHANNEL_REVERSE, false));
-            if (prefItems.size() > 3)
-                prefItems.get(3).setItemSelected(Hawk.get(HawkConfig.LIVE_CROSS_GROUP, false));
-            if (prefItems.size() > 4)
-                prefItems.get(4).setItemSelected(Hawk.get(HawkConfig.LIVE_SKIP_PASSWORD, false));
+                if (prefItems.size() > 1)
+                    prefItems.get(1).setItemSelected(Hawk.get(HawkConfig.LIVE_SHOW_NET_SPEED, false));
+                if (prefItems.size() > 2)
+                    prefItems.get(2).setItemSelected(Hawk.get(HawkConfig.LIVE_CHANNEL_REVERSE, false));
+                if (prefItems.size() > 3)
+                    prefItems.get(3).setItemSelected(Hawk.get(HawkConfig.LIVE_CROSS_GROUP, false));
+                if (prefItems.size() > 4)
+                    prefItems.get(4).setItemSelected(Hawk.get(HawkConfig.LIVE_SKIP_PASSWORD, false));
+                if (prefItems.size() > 5)
+                    prefItems.get(5).setItemSelected(Hawk.get(HawkConfig.SHIYI_AUTO_NEXT, false));
+            }
         }
     }
 
@@ -260,6 +264,7 @@ public class LiveSettingsPanel {
             case 2: key = HawkConfig.LIVE_CHANNEL_REVERSE; break;
             case 3: key = HawkConfig.LIVE_CROSS_GROUP; break;
             case 4: key = HawkConfig.LIVE_SKIP_PASSWORD; break;
+            case 5: key = HawkConfig.SHIYI_AUTO_NEXT; break;
         }
         if (key == null) return;
         boolean newValue = !Hawk.get(key, false);
@@ -313,7 +318,6 @@ public class LiveSettingsPanel {
                 .setListener(null);
         handler.removeCallbacks(hideRunnable);
         handler.postDelayed(hideRunnable, LiveConstants.AUTO_HIDE_SETTINGS_MS);
-        // 延迟请求布局，避免使用未初始化的变量
         handler.postDelayed(() -> {
             LinearLayout root = rootViewRef.get();
             if (root != null) root.requestLayout();
