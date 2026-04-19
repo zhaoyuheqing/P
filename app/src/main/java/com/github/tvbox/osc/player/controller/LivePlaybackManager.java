@@ -189,15 +189,27 @@ public class LivePlaybackManager {
     }
 
     public void playShiyi(String shiyiTimeRange) {
-        if (currentChannel == null || videoView == null) return;
-        isShiyiMode = true;
-        shiyiTime = shiyiTimeRange;
-        if (listener != null) listener.onShiyiModeChanged(true, shiyiTimeRange);
-        String[] urls = buildShiyiUrls(currentChannel.getUrl(), shiyiTimeRange);
-        videoView.release();
-        videoView.setUrl(urls[0], buildPlayHeaders(urls[0]));
-        videoView.start();
-    }
+    if (currentChannel == null || videoView == null) return;
+
+    // === 关键修复：和 playChannel 一样，重新初始化播放器（专治 IJK 最近8小时内不跳转）===
+    videoView.release();
+    
+    // 重新走一次直播播放器的初始化流程（IJK 需要这一步）
+    playerManager.getLiveChannelPlayer(videoView, currentChannel.getChannelName());
+    
+    // 更新当前类型（防止后面状态不一致）
+    this.currentPlayerType = playerManager.getLivePlayerType();
+
+    isShiyiMode = true;
+    shiyiTime = shiyiTimeRange;
+    if (listener != null) listener.onShiyiModeChanged(true, shiyiTimeRange);
+
+    String[] urls = buildShiyiUrls(currentChannel.getUrl(), shiyiTimeRange);
+    String finalUrl = urls[0];   // 优先使用 TVOD 版本
+
+    videoView.setUrl(finalUrl, buildPlayHeaders(finalUrl));
+    videoView.start();
+}
 
     public void playNextSource() {
         if (listener != null) listener.onRequestChangeSource(1);
