@@ -7,9 +7,11 @@ import android.view.MotionEvent;
 import androidx.annotation.NonNull;
 
 import com.github.tvbox.osc.api.ApiConfig;
+import com.github.tvbox.osc.bean.Epginfo;
 import com.github.tvbox.osc.bean.LiveChannelItem;
 import com.github.tvbox.osc.bean.LivePlayerManager;
 import com.github.tvbox.osc.constant.LiveConstants;
+import com.github.tvbox.osc.util.EpgCacheHelper;
 import com.github.tvbox.osc.util.HawkConfig;
 import com.orhanobut.hawk.Hawk;
 
@@ -18,6 +20,7 @@ import org.json.JSONObject;
 
 import java.lang.ref.WeakReference;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
@@ -46,6 +49,8 @@ public class LivePlaybackManager {
     private long currentSegmentEndTime = 0;
     private boolean isSegmentSeeking = false;
 
+    private EpgCacheHelper epgCacheHelper;
+
     private PlaybackListener listener;
 
     private final Runnable timeoutChangeSourceRun = this::handleTimeoutChangeSource;
@@ -62,6 +67,7 @@ public class LivePlaybackManager {
         void onShiyiModeChanged(boolean isShiyi, String timeRange);
         void onRequestChangeSource(int direction);
         void showControlPanel();
+        void onShiyiAutoNext(Epginfo nextEpg);
     }
 
     public LivePlaybackManager(@NonNull Context context, @NonNull Handler handler, @NonNull VideoView videoView) {
@@ -69,6 +75,10 @@ public class LivePlaybackManager {
         this.mainHandler = handler;
         this.videoView = videoView;
         initController();
+    }
+
+    public void setEpgCacheHelper(EpgCacheHelper helper) {
+        this.epgCacheHelper = helper;
     }
 
     private void initController() {
@@ -120,13 +130,71 @@ public class LivePlaybackManager {
             case VideoView.STATE_BUFFERING:
             case VideoView.STATE_PREPARING:
             case VideoView.STATE_ERROR:
+                startTimeoutTimer();
+                break;
             case VideoView.STATE_PLAYBACK_COMPLETED:
-                if (isLive24hMode && currentSegmentIndex < LiveConstants.SEGMENT_COUNT - 1) {
-                    long nextStart = currentSegmentEndTime;
-                    if (nextStart < System.currentTimeMillis()) {
-                        seekToLiveTimeSegment(nextStart + 1000, true);
+                // 优先处理直播进度条模式的分段衔接
+                if (isLive24hMode) {
+                    if (currentSegmentIndex > 0) {
+                        long nextStart = currentSegmentEndTime;
+                        seekToLiveTimeSegment(nextStart, true);
+                        return;
+                    } else if (currentSegmentIndex == 0) {
+                        resetShiyiMode();
                         return;
                     }
+                    resetShiyiMode();
+                    return;
+                }
+                // 普通 EPG 回放
+                if (isShiyiMode) {
+                    boolean autoNext = Hawk.get(HawkConfig.SHIYI_AUTO_NEXT, false);
+                    if (autoNext && epgCacheHelper != null && shiyiTime != null && shiyiTime.contains("-")) {
+                        String[] parts = shiyiTime.split("-");
+                        try {
+                            SimpleDateFormat sdf = LiveConstants.getGMT8Formatter(LiveConstants.DATE_FORMAT_YMDHMS);
+                            long currentEnd = sdf.parse(parts[1]).getTime();
+                            String channelName = currentChannel.getChannelName();
+                            Date endDate = new Date(currentEnd);
+                            String dateStr = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD).format(endDate);
+                            ArrayList<Epginfo> epgList = epgCacheHelper.getCachedEpg(channelName, dateStr);
+                            Epginfo nextEpg = null;
+                            if (epgList != null && !epgList.isEmpty()) {
+                                for (Epginfo epg : epgList) {
+                                    if (epg.startdateTime.getTime() > currentEnd) {
+                                        nextEpg = epg;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (nextEpg == null) {
+                                Calendar cal = Calendar.getInstance();
+                                cal.setTime(endDate);
+                                cal.add(Calendar.DAY_OF_MONTH, 1);
+                                String nextDateStr = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD).format(cal.getTime());
+                                ArrayList<Epginfo> nextDayEpgList = epgCacheHelper.getCachedEpg(channelName, nextDateStr);
+                                if (nextDayEpgList != null && !nextDayEpgList.isEmpty()) {
+                                    nextEpg = nextDayEpgList.get(0);
+                                    nextEpg.epgDate = cal.getTime();
+                                }
+                            }
+                            if (nextEpg != null) {
+                                SimpleDateFormat sdfTime = LiveConstants.getGMT8Formatter(LiveConstants.DATE_FORMAT_YMDHMS);
+                                String newStart = sdfTime.format(nextEpg.startdateTime);
+                                String newEnd = sdfTime.format(nextEpg.enddateTime);
+                                String newRange = newStart + "-" + newEnd;
+                                if (listener != null) {
+                                    listener.onShiyiAutoNext(nextEpg);
+                                }
+                                playShiyi(newRange);
+                                return;
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    resetShiyiMode();
+                    return;
                 }
                 startTimeoutTimer();
                 break;
@@ -390,7 +458,7 @@ public class LivePlaybackManager {
 
         long segmentEnd;
         if (segmentIndex == 0) {
-            segmentEnd = now - 5000;
+            segmentEnd = now;
         } else {
             segmentEnd = now - segmentIndex * LiveConstants.SEGMENT_DURATION_MS;
         }
@@ -421,6 +489,15 @@ public class LivePlaybackManager {
             if (newTime > now) newTime = now;
             seekToLiveTimeSegment(newTime, true);
         } else if (getPlaybackType() == 2) {
+            long newPos = getCurrentPosition() + seconds * 1000L;
+            if (newPos < 0) newPos = 0;
+            long duration = getDuration();
+            if (newPos > duration) newPos = duration;
+            seekTo((int) newPos);
+        } else if (getPlaybackType() == 0) {
+            setLive24hMode(true);
+            seekRelative(seconds);
+        } else if (getPlaybackType() == 1) {
             long newPos = getCurrentPosition() + seconds * 1000L;
             if (newPos < 0) newPos = 0;
             long duration = getDuration();
