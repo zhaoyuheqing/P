@@ -1,8 +1,8 @@
 package com.github.tvbox.osc.ui.panel;
 
 import android.app.Activity;
-import android.content.pm.ActivityInfo;
 import android.content.Context;
+import android.content.pm.ActivityInfo;
 import android.os.Handler;
 import android.util.Log;
 import android.view.KeyEvent;
@@ -51,17 +51,15 @@ public class LiveControlPanel {
     private long pendingSeekOffset = 0;
     private final Runnable pendingSeekRunnable = this::executePendingSeek;
 
-    // 衔接防重复标志
-    private boolean isPreparingNextSegment = false;
-
     // 焦点模式
     private boolean isButtonFocusMode = false;
-    // 普通回放时预设的EPG信息
     private String currentEpgInfo = "";
-    // 长按拖动相关
+
+    // 长按加速
     private Handler longPressHandler = new Handler();
     private Runnable longPressRunnable;
     private int longPressKeyCode = 0;
+    private long longPressStartTime = 0;
     private static final long LONG_PRESS_DELAY = 500;
     private static final long REPEAT_INTERVAL = 100;
 
@@ -261,7 +259,6 @@ public class LiveControlPanel {
             }
             tvCurrentEpg.setText(currentEpgInfo);
         } else {
-            // 纯直播视觉模式
             long now = System.currentTimeMillis();
             long maxSec = LiveConstants.LIVE_REPLAY_WINDOW_MS / 1000;
             seekBar.setMax((int) maxSec);
@@ -286,7 +283,6 @@ public class LiveControlPanel {
             seekBar.setProgress(progress);
             updateTimeDisplayForLive(liveTime, now);
             updateEpgByTime(liveTime);
-            checkAndSwitchToNextSegment(liveTime);
         } else if (playbackManager.getPlaybackType() == 2) {
             long duration = playbackManager.getDuration();
             long currentPos = playbackManager.getCurrentPosition();
@@ -330,7 +326,7 @@ public class LiveControlPanel {
     }
 
     private void updateTimeByProgress(int progressSec) {
-        if (playbackManager.isLive24hMode() || playbackManager.getPlaybackType() == 0) {
+        if (playbackManager.isLive24hMode()) {
             long targetTime = getLiveTimeFromProgress(progressSec);
             long now = System.currentTimeMillis();
             updateTimeDisplayForLive(targetTime, now);
@@ -339,19 +335,11 @@ public class LiveControlPanel {
             tvCurrentTime.setText(formatTime(progressMs));
             long totalMs = playbackManager.getDuration();
             tvTotalTime.setText(formatTime(totalMs));
-        }
-    }
-
-    private void checkAndSwitchToNextSegment(long liveTime) {
-        if (isPreparingNextSegment) return;
-        int idx = playbackManager.getCurrentSegmentIndex();
-        long segmentEnd = playbackManager.getCurrentSegmentEndTime();
-        if (idx < 0 || segmentEnd <= 0) return;
-        long timeToEnd = segmentEnd - liveTime;
-        if (timeToEnd > 0 && timeToEnd <= LiveConstants.SEGMENT_SWITCH_THRESHOLD_MS) {
-            isPreparingNextSegment = true;
-            playbackManager.seekToLiveTimeSegment(segmentEnd, true);
-            handler.postDelayed(() -> isPreparingNextSegment = false, 3000);
+        } else if (playbackManager.getPlaybackType() == 0) {
+            long targetTime = getLiveTimeFromProgress(progressSec);
+            long now = System.currentTimeMillis();
+            updateTimeDisplayForLive(targetTime, now);
+            updateEpgByTime(targetTime);
         }
     }
 
@@ -385,7 +373,7 @@ public class LiveControlPanel {
         Activity activity = (Activity) context;
         int currentOrientation = activity.getRequestedOrientation();
         if (currentOrientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED ||
-            currentOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
+                currentOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
             activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         } else {
             activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
@@ -462,7 +450,6 @@ public class LiveControlPanel {
                     updateUI();
                 }
             }
-            // 重置自动隐藏计时器
             handler.removeCallbacks(autoHideRunnable);
             handler.postDelayed(autoHideRunnable, LiveConstants.CONTROL_PANEL_AUTO_HIDE_MS);
             return true;
@@ -509,13 +496,25 @@ public class LiveControlPanel {
     private void startLongPressRepeat(int keyCode) {
         if (longPressRunnable != null) return;
         longPressKeyCode = keyCode;
+        longPressStartTime = System.currentTimeMillis();
         longPressRunnable = new Runnable() {
             @Override
             public void run() {
-                if (longPressKeyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
-                    playbackManager.seekRelative(-1);
+                long duration = System.currentTimeMillis() - longPressStartTime;
+                int step;
+                if (duration < 2000) {
+                    step = 10;
+                } else if (duration < 5000) {
+                    step = 60;
+                } else if (duration < 10000) {
+                    step = 600;
                 } else {
-                    playbackManager.seekRelative(1);
+                    step = 1800;
+                }
+                if (longPressKeyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                    playbackManager.seekRelative(-step);
+                } else {
+                    playbackManager.seekRelative(step);
                 }
                 updateUI();
                 longPressHandler.postDelayed(this, REPEAT_INTERVAL);
@@ -529,6 +528,7 @@ public class LiveControlPanel {
             longPressHandler.removeCallbacks(longPressRunnable);
             longPressRunnable = null;
         }
+        longPressStartTime = 0;
     }
 
     // ========== 焦点管理 ==========
