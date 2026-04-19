@@ -121,7 +121,7 @@ public class LivePlaybackManager {
             case VideoView.STATE_PREPARING:
             case VideoView.STATE_ERROR:
             case VideoView.STATE_PLAYBACK_COMPLETED:
-                if (isLive24hMode && currentSegmentIndex >0) {
+                if (isLive24hMode && currentSegmentIndex < LiveConstants.SEGMENT_COUNT - 1) {
                     long nextStart = currentSegmentEndTime;
                     if (nextStart < System.currentTimeMillis()) {
                         seekToLiveTimeSegment(nextStart + 1000, true);
@@ -189,27 +189,15 @@ public class LivePlaybackManager {
     }
 
     public void playShiyi(String shiyiTimeRange) {
-    if (currentChannel == null || videoView == null) return;
-
-    // === 关键修复：和 playChannel 一样，重新初始化播放器（专治 IJK 最近8小时内不跳转）===
-    videoView.release();
-    
-    // 重新走一次直播播放器的初始化流程（IJK 需要这一步）
-    playerManager.getLiveChannelPlayer(videoView, currentChannel.getChannelName());
-    
-    // 更新当前类型（防止后面状态不一致）
-    this.currentPlayerType = playerManager.getLivePlayerType();
-
-    isShiyiMode = true;
-    shiyiTime = shiyiTimeRange;
-    if (listener != null) listener.onShiyiModeChanged(true, shiyiTimeRange);
-
-    String[] urls = buildShiyiUrls(currentChannel.getUrl(), shiyiTimeRange);
-    String finalUrl = urls[0];   // 优先使用 TVOD 版本
-
-    videoView.setUrl(finalUrl, buildPlayHeaders(finalUrl));
-    videoView.start();
-}
+        if (currentChannel == null || videoView == null) return;
+        isShiyiMode = true;
+        shiyiTime = shiyiTimeRange;
+        if (listener != null) listener.onShiyiModeChanged(true, shiyiTimeRange);
+        String[] urls = buildShiyiUrls(currentChannel.getUrl(), shiyiTimeRange);
+        videoView.release();
+        videoView.setUrl(urls[0], buildPlayHeaders(urls[0]));
+        videoView.start();
+    }
 
     public void playNextSource() {
         if (listener != null) listener.onRequestChangeSource(1);
@@ -385,52 +373,44 @@ public class LivePlaybackManager {
             return System.currentTimeMillis();
         }
     }
+
     public void seekToLiveTimeSegment(long targetTimeMs, boolean enable24hMode) {
-    if (isSegmentSeeking) return;
-    isSegmentSeeking = true;
+        if (isSegmentSeeking) {
+            isSegmentSeeking = false;
+            return;
+        }
+        if (enable24hMode) setLive24hMode(true);
+        long now = System.currentTimeMillis();
+        long minTime = now - LiveConstants.LIVE_REPLAY_WINDOW_MS;
+        targetTimeMs = Math.max(minTime, Math.min(now, targetTimeMs));
 
-    if (enable24hMode) setLive24hMode(true);
+        long offsetFromNow = now - targetTimeMs;
+        int segmentIndex = (int) (offsetFromNow / LiveConstants.SEGMENT_DURATION_MS);
+        segmentIndex = Math.min(segmentIndex, LiveConstants.SEGMENT_COUNT - 1);
 
-    long now = System.currentTimeMillis();
-    long minTime = now - LiveConstants.LIVE_REPLAY_WINDOW_MS;
-    targetTimeMs = Math.max(minTime, Math.min(now, targetTimeMs));
+        long segmentEnd;
+        if (segmentIndex == 0) {
+            segmentEnd = now - 5000;
+        } else {
+            segmentEnd = now - segmentIndex * LiveConstants.SEGMENT_DURATION_MS;
+        }
+        long segmentStart = segmentEnd - LiveConstants.SEGMENT_DURATION_MS;
 
-    long offsetFromNow = now - targetTimeMs;
-    int segmentIndex = (int) (offsetFromNow / LiveConstants.SEGMENT_DURATION_MS);
-    segmentIndex = Math.min(segmentIndex, LiveConstants.SEGMENT_COUNT - 1);
+        long playStart = Math.max(segmentStart, Math.min(segmentEnd, targetTimeMs));
 
-    long segmentEnd = now - segmentIndex * LiveConstants.SEGMENT_DURATION_MS;
-    long segmentStart = segmentEnd - LiveConstants.SEGMENT_DURATION_MS;
-    if (segmentIndex == LiveConstants.SEGMENT_COUNT - 1) {
-        segmentStart = Math.max(segmentStart, minTime);
-    }
+        SimpleDateFormat sdf = LiveConstants.getGMT8Formatter(LiveConstants.DATE_FORMAT_YMDHMS);
+        String startStr = sdf.format(new Date(playStart));
+        String endStr = sdf.format(new Date(segmentEnd));
+        String timeRange = startStr + "-" + endStr;
 
-    long playStart = Math.max(segmentStart, Math.min(segmentEnd, targetTimeMs));
+        currentSegmentIndex = segmentIndex;
+        currentSegmentEndTime = segmentEnd;
 
-    SimpleDateFormat sdf = LiveConstants.getGMT8Formatter(LiveConstants.DATE_FORMAT_YMDHMS);
-    String startStr = sdf.format(new Date(playStart));
-    String endStr = sdf.format(new Date(segmentEnd));
-    String timeRange = startStr + "-" + endStr;
-
-    currentSegmentIndex = segmentIndex;
-    currentSegmentEndTime = segmentEnd;
-
-    // 强力重置：先彻底释放，防止缓存污染
-    if (videoView != null) {
-        videoView.pause();
-        videoView.release();
-    }
-
-    // 对最近一段（segmentIndex==0）使用更长延迟 + 强制重新初始化
-    long delay = (segmentIndex == 0) ? 550 : 300;
-
-    mainHandler.postDelayed(() -> {
+        isSegmentSeeking = true;
         playShiyi(timeRange);
         isSegmentSeeking = false;
-    }, delay);
-}
+    }
 
-    
     public void seekRelative(int seconds) {
         if (isLive24hMode) {
             long currentLiveTime = getCurrentLiveTime();
