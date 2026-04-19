@@ -458,7 +458,7 @@ public class LivePlaybackManager {
 
         long segmentEnd;
         if (segmentIndex == 0) {
-            segmentEnd = now;
+            segmentEnd = now - 5000;
         } else {
             segmentEnd = now - segmentIndex * LiveConstants.SEGMENT_DURATION_MS;
         }
