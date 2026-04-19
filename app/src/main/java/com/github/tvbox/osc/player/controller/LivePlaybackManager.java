@@ -388,12 +388,8 @@ public class LivePlaybackManager {
         int segmentIndex = (int) (offsetFromNow / LiveConstants.SEGMENT_DURATION_MS);
         segmentIndex = Math.min(segmentIndex, LiveConstants.SEGMENT_COUNT - 1);
 
-        long segmentEnd;
-        if (segmentIndex == 0) {
-            segmentEnd = now;
-        } else {
-            segmentEnd = now - segmentIndex * LiveConstants.SEGMENT_DURATION_MS;
-        }
+        long segmentEnd = now - segmentIndex * LiveConstants.SEGMENT_DURATION_MS;
+        
         long segmentStart = segmentEnd - LiveConstants.SEGMENT_DURATION_MS;
 
         long playStart = Math.max(segmentStart, Math.min(segmentEnd, targetTimeMs));
