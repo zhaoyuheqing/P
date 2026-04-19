@@ -305,6 +305,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
 
         mVideoView = findViewById(R.id.mVideoView);
         playbackManager = new LivePlaybackManager(this, mHandler, mVideoView);
+        playbackManager.setEpgCacheHelper(epgCacheHelper);
         playbackManager.setListener(new LivePlaybackManager.PlaybackListener() {
             @Override
             public boolean onSingleTap(MotionEvent e) {
@@ -382,6 +383,27 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                 if (controlPanel != null) {
                     controlPanel.show();
                 }
+            }
+
+            @Override
+            public void onShiyiAutoNext(Epginfo nextEpg) {
+                if (epgListAdapter != null && nextEpg != null) {
+                    // 使用时间戳定位位置
+                    int index = -1;
+                    for (int i = 0; i < epgListAdapter.getData().size(); i++) {
+                        Epginfo epg = epgListAdapter.getData().get(i);
+                        if (epg.startdateTime.equals(nextEpg.startdateTime) && epg.enddateTime.equals(nextEpg.enddateTime)) {
+                            index = i;
+                            break;
+                        }
+                    }
+                    if (index != -1) {
+                        epgListAdapter.setShiyiSelection(index, true, timeFormat.format(nextEpg.epgDate));
+                        mEpgInfoGridView.setSelectedPosition(index);
+                        mEpgInfoGridView.setSelection(index);
+                    }
+                }
+                // 不调用 showBottomEpg()
             }
         });
 
