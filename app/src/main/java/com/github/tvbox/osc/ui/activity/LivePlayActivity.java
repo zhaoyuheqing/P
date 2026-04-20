@@ -384,14 +384,23 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                     controlPanel.show();
                 }
             }
-
             @Override
-            public void onShiyiAutoNext(String epgInfo) {
-                if (controlPanel != null && epgInfo != null) {
-                    controlPanel.setCurrentEpgInfo(epgInfo);
-                }
-                // 不调用 showBottomEpg()
-            }
+public void onShiyiAutoNext(String epgInfo, int position, Date date) {
+    // 更新控制面板记忆
+    if (controlPanel != null && epgInfo != null) {
+        controlPanel.setCurrentEpgInfo(epgInfo);
+    }
+    // 更新 EPG 列表高亮
+    if (epgListAdapter != null && position != -1 && date != null) {
+        String dateStr = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD).format(date);
+        epgListAdapter.setShiyiSelection(position, true, dateStr);
+        epgListAdapter.notifyDataSetChanged();
+        mEpgInfoGridView.setSelectedPosition(position);
+        mEpgInfoGridView.setSelection(position);
+    }
+}
+
+            
         });
 
         tvSelectedChannel = findViewById(R.id.tv_selected_channel);
