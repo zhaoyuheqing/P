@@ -166,7 +166,7 @@ if (isShiyiMode) {
             if (epgList != null && !epgList.isEmpty()) {
                 for (int i = 0; i < epgList.size(); i++) {
                     Epginfo epg = epgList.get(i);
-                    if (epg.startdateTime.getTime() >= currentEnd) {
+                    if (epg.startdateTime.getTime() >= currentEnd+3000) {
                         nextEpg = epg;
                         position = i;
                         break;
