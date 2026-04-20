@@ -67,7 +67,7 @@ public class LivePlaybackManager {
         void onShiyiModeChanged(boolean isShiyi, String timeRange);
         void onRequestChangeSource(int direction);
         void showControlPanel();
-        void onShiyiAutoNext(Epginfo nextEpg);
+        void onShiyiAutoNext(String epgInfo);  // 传递 EPG 信息字符串
     }
 
     public LivePlaybackManager(@NonNull Context context, @NonNull Handler handler, @NonNull VideoView videoView) {
@@ -136,14 +136,18 @@ public class LivePlaybackManager {
                 // 优先处理直播进度条模式的分段衔接
                 if (isLive24hMode) {
                     if (currentSegmentIndex > 0) {
+                        // 还有更早的段，衔接下一段（从远到近）
                         long nextStart = currentSegmentEndTime;
                         seekToLiveTimeSegment(nextStart, true);
                         return;
                     } else if (currentSegmentIndex == 0) {
+                        // 已播完最近一段，退出时移回到直播
                         resetShiyiMode();
+                        playChannel(currentChannel, false);
                         return;
                     }
                     resetShiyiMode();
+                    playChannel(currentChannel, false);
                     return;
                 }
                 // 普通 EPG 回放
@@ -161,7 +165,7 @@ public class LivePlaybackManager {
                             Epginfo nextEpg = null;
                             if (epgList != null && !epgList.isEmpty()) {
                                 for (Epginfo epg : epgList) {
-                                    if (epg.startdateTime.getTime() > currentEnd) {
+                                    if (epg.startdateTime.getTime() >= currentEnd) {
                                         nextEpg = epg;
                                         break;
                                     }
@@ -175,7 +179,6 @@ public class LivePlaybackManager {
                                 ArrayList<Epginfo> nextDayEpgList = epgCacheHelper.getCachedEpg(channelName, nextDateStr);
                                 if (nextDayEpgList != null && !nextDayEpgList.isEmpty()) {
                                     nextEpg = nextDayEpgList.get(0);
-                                    nextEpg.epgDate = cal.getTime();
                                 }
                             }
                             if (nextEpg != null) {
@@ -183,8 +186,9 @@ public class LivePlaybackManager {
                                 String newStart = sdfTime.format(nextEpg.startdateTime);
                                 String newEnd = sdfTime.format(nextEpg.enddateTime);
                                 String newRange = newStart + "-" + newEnd;
+                                String epgInfo = "正在播放：" + nextEpg.title + " " + nextEpg.start + "-" + nextEpg.end;
                                 if (listener != null) {
-                                    listener.onShiyiAutoNext(nextEpg);
+                                    listener.onShiyiAutoNext(epgInfo);
                                 }
                                 playShiyi(newRange);
                                 return;
@@ -193,7 +197,9 @@ public class LivePlaybackManager {
                             e.printStackTrace();
                         }
                     }
+                    // 没有下一段或自动续播未开启，退出时移回到直播
                     resetShiyiMode();
+                    playChannel(currentChannel, false);
                     return;
                 }
                 startTimeoutTimer();
@@ -244,7 +250,7 @@ public class LivePlaybackManager {
             if (listener != null) listener.onCurrentChannelChanged(channel, true);
             return;
         }
-        resetShiyiMode();
+        resetShiyiMode();  // 重置时移标志，但不自动播放直播（由调用者决定）
         videoView.release();
         currentChannel = channel;
         currentChannel.setinclude_back(currentChannel.getUrl().indexOf(LiveConstants.PLTV_FLAG + "8888") != -1);
@@ -458,7 +464,7 @@ public class LivePlaybackManager {
 
         long segmentEnd;
         if (segmentIndex == 0) {
-            segmentEnd = now - 5000;
+            segmentEnd = now;
         } else {
             segmentEnd = now - segmentIndex * LiveConstants.SEGMENT_DURATION_MS;
         }
