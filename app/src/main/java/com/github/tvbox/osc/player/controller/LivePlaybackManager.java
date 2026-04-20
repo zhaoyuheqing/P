@@ -67,8 +67,7 @@ public class LivePlaybackManager {
         void onShiyiModeChanged(boolean isShiyi, String timeRange);
         void onRequestChangeSource(int direction);
         void showControlPanel();
-        void onShiyiAutoNext(String epgInfo);  // 传递 EPG 信息字符串
-    }
+        void onShiyiAutoNext(String epgInfo, int position, Date date);    }
 
     public LivePlaybackManager(@NonNull Context context, @NonNull Handler handler, @NonNull VideoView videoView) {
         this.contextRef = new WeakReference<>(context);
@@ -150,58 +149,61 @@ public class LivePlaybackManager {
                     playChannel(currentChannel, false);
                     return;
                 }
-                // 普通 EPG 回放
-                if (isShiyiMode) {
-                    boolean autoNext = Hawk.get(HawkConfig.SHIYI_AUTO_NEXT, false);
-                    if (autoNext && epgCacheHelper != null && shiyiTime != null && shiyiTime.contains("-")) {
-                        String[] parts = shiyiTime.split("-");
-                        try {
-                            SimpleDateFormat sdf = LiveConstants.getGMT8Formatter(LiveConstants.DATE_FORMAT_YMDHMS);
-                            long currentEnd = sdf.parse(parts[1]).getTime();
-                            String channelName = currentChannel.getChannelName();
-                            Date endDate = new Date(currentEnd);
-                            String dateStr = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD).format(endDate);
-                            ArrayList<Epginfo> epgList = epgCacheHelper.getCachedEpg(channelName, dateStr);
-                            Epginfo nextEpg = null;
-                            if (epgList != null && !epgList.isEmpty()) {
-                                for (Epginfo epg : epgList) {
-                                    if (epg.startdateTime.getTime() >= currentEnd) {
-                                        nextEpg = epg;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (nextEpg == null) {
-                                Calendar cal = Calendar.getInstance();
-                                cal.setTime(endDate);
-                                cal.add(Calendar.DAY_OF_MONTH, 1);
-                                String nextDateStr = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD).format(cal.getTime());
-                                ArrayList<Epginfo> nextDayEpgList = epgCacheHelper.getCachedEpg(channelName, nextDateStr);
-                                if (nextDayEpgList != null && !nextDayEpgList.isEmpty()) {
-                                    nextEpg = nextDayEpgList.get(0);
-                                }
-                            }
-                            if (nextEpg != null) {
-                                SimpleDateFormat sdfTime = LiveConstants.getGMT8Formatter(LiveConstants.DATE_FORMAT_YMDHMS);
-                                String newStart = sdfTime.format(nextEpg.startdateTime);
-                                String newEnd = sdfTime.format(nextEpg.enddateTime);
-                                String newRange = newStart + "-" + newEnd;
-                                String epgInfo = "正在播放：" + nextEpg.title + " " + nextEpg.start + "-" + nextEpg.end;
-                                if (listener != null) {
-                                    listener.onShiyiAutoNext(epgInfo);
-                                }
-                                playShiyi(newRange);
-                                return;
-                            }
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
+               // 普通 EPG 回放
+if (isShiyiMode) {
+    boolean autoNext = Hawk.get(HawkConfig.SHIYI_AUTO_NEXT, false);
+    if (autoNext && epgCacheHelper != null && shiyiTime != null && shiyiTime.contains("-")) {
+        String[] parts = shiyiTime.split("-");
+        try {
+            SimpleDateFormat sdf = LiveConstants.getGMT8Formatter(LiveConstants.DATE_FORMAT_YMDHMS);
+            long currentEnd = sdf.parse(parts[1]).getTime();
+            String channelName = currentChannel.getChannelName();
+            Date endDate = new Date(currentEnd);
+            String dateStr = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD).format(endDate);
+            ArrayList<Epginfo> epgList = epgCacheHelper.getCachedEpg(channelName, dateStr);
+            Epginfo nextEpg = null;
+            int position = -1;
+            if (epgList != null && !epgList.isEmpty()) {
+                for (int i = 0; i < epgList.size(); i++) {
+                    Epginfo epg = epgList.get(i);
+                    if (epg.startdateTime.getTime() >= currentEnd) {
+                        nextEpg = epg;
+                        position = i;
+                        break;
                     }
-                    // 没有下一段或自动续播未开启，退出时移回到直播
-                    resetShiyiMode();
-                    playChannel(currentChannel, false);
-                    return;
                 }
+            }
+            if (nextEpg == null) {
+                Calendar cal = Calendar.getInstance();
+                cal.setTime(endDate);
+                cal.add(Calendar.DAY_OF_MONTH, 1);
+                String nextDateStr = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD).format(cal.getTime());
+                ArrayList<Epginfo> nextDayEpgList = epgCacheHelper.getCachedEpg(channelName, nextDateStr);
+                if (nextDayEpgList != null && !nextDayEpgList.isEmpty()) {
+                    nextEpg = nextDayEpgList.get(0);
+                    position = 0;
+                }
+            }
+            if (nextEpg != null) {
+                SimpleDateFormat sdfTime = LiveConstants.getGMT8Formatter(LiveConstants.DATE_FORMAT_YMDHMS);
+                String newStart = sdfTime.format(nextEpg.startdateTime);
+                String newEnd = sdfTime.format(nextEpg.enddateTime);
+                String newRange = newStart + "-" + newEnd;
+                String epgInfo = "正在播放：" + nextEpg.title + " " + nextEpg.start + "-" + nextEpg.end;
+                if (listener != null) {
+                    listener.onShiyiAutoNext(epgInfo, position, nextEpg.epgDate);
+                }
+                playShiyi(newRange);
+                return;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    resetShiyiMode();
+    playChannel(currentChannel, false);
+    return;
+}
                 startTimeoutTimer();
                 break;
         }
