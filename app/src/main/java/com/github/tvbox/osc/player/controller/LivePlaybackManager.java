@@ -129,11 +129,6 @@ public class LivePlaybackManager {
             case VideoView.STATE_BUFFERING:
             case VideoView.STATE_PREPARING:
             case VideoView.STATE_ERROR:
-                if (isShiyiMode) {
-                    resetShiyiMode();
-                        playChannel(currentChannel, false);
-                        return;
-                    }
                 startTimeoutTimer();
                 break;
             case VideoView.STATE_PLAYBACK_COMPLETED:
@@ -217,6 +212,11 @@ if (isShiyiMode) {
     private void startTimeoutTimer() {
         cancelAllTimeouts();
         int timeout = Hawk.get(HawkConfig.LIVE_CONNECT_TIMEOUT, 2);
+        if (isShiyiMode) {
+                    resetShiyiMode();
+                        playChannel(currentChannel, false);
+                        return;
+                    }
         if (timeout == 0) {
             mainHandler.postDelayed(timeoutReplayRun, 30_000);
         } else {
