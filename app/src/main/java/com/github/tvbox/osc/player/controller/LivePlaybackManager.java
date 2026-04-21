@@ -208,15 +208,20 @@ if (isShiyiMode) {
                 break;
         }
     }
+    private final Runnable timeoutResetShiyiRun = () -> {
+    if (isShiyiMode && !isLive24hMode) {
+        resetShiyiMode();
+        playChannel(currentChannel, false);
+    }
+};
 
     private void startTimeoutTimer() {
         cancelAllTimeouts();
         int timeout = Hawk.get(HawkConfig.LIVE_CONNECT_TIMEOUT, 2);
         if (isShiyiMode) {
-                    resetShiyiMode();
-                        playChannel(currentChannel, false);
-                        return;
-                    }
+        mainHandler.postDelayed(timeoutResetShiyiRun, 15000); // 30秒超时
+        return;
+    }            
         if (timeout == 0) {
             mainHandler.postDelayed(timeoutReplayRun, 30_000);
         } else {
@@ -227,6 +232,7 @@ if (isShiyiMode) {
     public void cancelAllTimeouts() {
         mainHandler.removeCallbacks(timeoutChangeSourceRun);
         mainHandler.removeCallbacks(timeoutReplayRun);
+        mainHandler.removeCallbacks(timeoutResetShiyiRun);
     }
 
     private void handleTimeoutChangeSource() {
