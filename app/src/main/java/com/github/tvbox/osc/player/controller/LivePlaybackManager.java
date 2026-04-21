@@ -129,6 +129,11 @@ public class LivePlaybackManager {
             case VideoView.STATE_BUFFERING:
             case VideoView.STATE_PREPARING:
             case VideoView.STATE_ERROR:
+                if (isShiyiMode) {
+                    resetShiyiMode();
+                        playChannel(currentChannel, false);
+                        return;
+                    }
                 startTimeoutTimer();
                 break;
             case VideoView.STATE_PLAYBACK_COMPLETED:
@@ -166,7 +171,7 @@ if (isShiyiMode) {
             if (epgList != null && !epgList.isEmpty()) {
                 for (int i = 0; i < epgList.size(); i++) {
                     Epginfo epg = epgList.get(i);
-                    if (epg.startdateTime.getTime() >= currentEnd+3000) {
+                    if (epg.startdateTime.getTime() >= currentEnd-30000) {
                         nextEpg = epg;
                         position = i;
                         break;
