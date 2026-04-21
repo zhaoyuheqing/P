@@ -209,7 +209,7 @@ if (isShiyiMode) {
         }
     }
     private final Runnable timeoutResetShiyiRun = () -> {
-    if (isShiyiMode && !isLive24hMode) {
+    if (isShiyiMode) {
         resetShiyiMode();
         playChannel(currentChannel, false);
     }
@@ -218,7 +218,10 @@ if (isShiyiMode) {
     private void startTimeoutTimer() {
         cancelAllTimeouts();
         int timeout = Hawk.get(HawkConfig.LIVE_CONNECT_TIMEOUT, 2);
-                 
+        if (isShiyiMode) {
+        mainHandler.postDelayed(timeoutResetShiyiRun, 15000); // 30秒超时
+        return;
+    }            
         if (timeout == 0) {
             mainHandler.postDelayed(timeoutReplayRun, 30_000);
         } else {
