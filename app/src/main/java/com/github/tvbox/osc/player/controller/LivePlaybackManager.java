@@ -219,7 +219,7 @@ if (isShiyiMode) {
         cancelAllTimeouts();
         int timeout = Hawk.get(HawkConfig.LIVE_CONNECT_TIMEOUT, 2);
         if (isShiyiMode) {
-        mainHandler.postDelayed(timeoutResetShiyiRun, 15000); // 30秒超时
+        mainHandler.postDelayed(timeoutResetShiyiRun, timeout * 5000L); // 30秒超时
         return;
     }            
         if (timeout == 0) {
