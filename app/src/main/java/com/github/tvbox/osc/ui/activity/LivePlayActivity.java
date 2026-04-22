@@ -343,7 +343,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                         channelListPanel.updateCurrentSelection(currentChannelGroupIndex, currentLiveChannelIndex);
                     }
                 }
-                if (playbackManager.isShiyiMode()&&epgListAdapter != null) epgListAdapter.setShiyiSelection(-1, false, null);
+                if (!playbackManager.isShiyiMode()&&epgListAdapter != null) epgListAdapter.setShiyiSelection(-1, false, null);
                 getEpg(new Date());
                 showChannelInfo();
                 updateBottomBarStaticInfo();
