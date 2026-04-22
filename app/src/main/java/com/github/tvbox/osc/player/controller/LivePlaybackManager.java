@@ -258,7 +258,6 @@ if (isShiyiMode) {
     // ========== 播放核心 ==========
     public void playChannel(LiveChannelItem channel, boolean isChangeSource) {
         if (channel == null || videoView == null) return;
-        setLive24hMode(false);
         if (isChangeSource && channel.getSourceNum() == 1) {
             if (listener != null) listener.onCurrentChannelChanged(channel, true);
             return;
