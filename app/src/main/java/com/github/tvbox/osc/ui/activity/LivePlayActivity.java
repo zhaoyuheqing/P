@@ -886,8 +886,6 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
     // ========== 播放控制 ==========
     private boolean playChannel(int channelGroupIndex, int liveChannelIndex, boolean changeSource) {
         if (playbackManager == null) return false;
-        if (playbackManager.isShiyiMode()) resetShiyiMode();
-        if (epgListAdapter != null) epgListAdapter.setShiyiSelection(-1, false, null);
         if (!changeSource && epgDateAdapter != null) epgDateAdapter.setSelectedIndex(6);
         if (channelGroupIndex >= liveChannelGroupList.size()) {
             Toast.makeText(App.getInstance(), "分组不存在", Toast.LENGTH_SHORT).show();
@@ -903,6 +901,8 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
             showChannelInfo();
             return true;
         }
+        if (playbackManager.isShiyiMode()) resetShiyiMode();
+        if (epgListAdapter != null) epgListAdapter.setShiyiSelection(-1, false, null);
         if (!changeSource) {
             currentChannelGroupIndex = channelGroupIndex;
             currentLiveChannelIndex = liveChannelIndex;
