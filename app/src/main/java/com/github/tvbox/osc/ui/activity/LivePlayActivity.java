@@ -343,7 +343,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                         channelListPanel.updateCurrentSelection(currentChannelGroupIndex, currentLiveChannelIndex);
                     }
                 }
-                getEpg(new Date())
+                getEpg(new Date());
                 showChannelInfo();
                 updateBottomBarStaticInfo();
                 updateStaticProgressVisibility();
