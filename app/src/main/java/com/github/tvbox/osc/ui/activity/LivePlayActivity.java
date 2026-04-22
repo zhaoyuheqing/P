@@ -343,6 +343,7 @@ public class LivePlayActivity extends BaseActivity implements LiveChannelListPan
                         channelListPanel.updateCurrentSelection(currentChannelGroupIndex, currentLiveChannelIndex);
                     }
                 }
+                if (playbackManager.isShiyiMode()&&epgListAdapter != null) epgListAdapter.setShiyiSelection(-1, false, null);
                 getEpg(new Date());
                 showChannelInfo();
                 updateBottomBarStaticInfo();
@@ -826,7 +827,6 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
             }
         }
         if (liveIndex >= 0 && now.compareTo(epgdata.get(liveIndex).enddateTime) <= 0) {
-            if (epgListAdapter != null) epgListAdapter.setShiyiSelection(-1, false, null);
             mEpgInfoGridView.setSelectedPosition(liveIndex);
             mEpgInfoGridView.setSelection(liveIndex);
             if (!shouldKeepShiyiHighlight) epgListAdapter.setSelectedEpgIndex(liveIndex);
