@@ -665,7 +665,7 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
         if (isEpg && currentLiveChannelItem != null) {
             epgDateAdapter.setSelectedIndex(6);
             getEpg(epgDateAdapter.getData().get(6).getDateParamVal());
-        } else if (!isEpg) resetShiyiMode();
+        } 
     }
 
     @Override
@@ -827,6 +827,7 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
             }
         }
         if (liveIndex >= 0 && now.compareTo(epgdata.get(liveIndex).enddateTime) <= 0) {
+            if (epgListAdapter != null) epgListAdapter.setShiyiSelection(-1, false, null);
             mEpgInfoGridView.setSelectedPosition(liveIndex);
             mEpgInfoGridView.setSelection(liveIndex);
             if (!shouldKeepShiyiHighlight) epgListAdapter.setSelectedEpgIndex(liveIndex);
@@ -1060,12 +1061,6 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
                 epgDateAdapter.setSelectedIndex(position);
                 getEpg(epgDateAdapter.getData().get(position).getDateParamVal());
             }
-        });
-        epgDateAdapter.setOnItemClickListener((adapter, view, position) -> {
-            FastClickCheckUtil.check(view);
-            if (channelListPanel != null) channelListPanel.resetHideTimer();
-            epgDateAdapter.setSelectedIndex(position);
-            getEpg(epgDateAdapter.getData().get(position).getDateParamVal());
         });
         epgDateAdapter.setSelectedIndex(6);
         mEpgDateGridView.addOnScrollListener(new RecyclerView.OnScrollListener() {
