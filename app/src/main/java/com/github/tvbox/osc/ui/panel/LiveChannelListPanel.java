@@ -266,7 +266,7 @@ public class LiveChannelListPanel {
             setEpgViewsVisible(false);
             setChannelViewsVisible(true);
             if (listener != null) {
-                listener.onEpgModeChanged(false);
+                listener.onEpgModeChanged(false);}
                 
         } else {
             setEpgViewsVisible(false);
