@@ -1059,7 +1059,7 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
             @Override public void onItemClick(TvRecyclerView parent, View itemView, int position) {
                 if (channelListPanel != null) channelListPanel.resetHideTimer();
                 epgDateAdapter.setSelectedIndex(position);
-                ;
+                getEpg(epgDateAdapter.getData().get(position).getDateParamVal());
             }
         });
         epgDateAdapter.setOnItemClickListener((adapter, view, position) -> {
