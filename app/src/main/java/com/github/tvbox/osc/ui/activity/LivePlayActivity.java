@@ -1055,7 +1055,7 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
                 epgDateAdapter.setFocusedIndex(position);
                 if (channelListPanel != null) channelListPanel.resetHideTimer();
             }
-            
+            });
         epgDateAdapter.setOnItemClickListener((adapter, view, position) -> {
             FastClickCheckUtil.check(view);
             if (channelListPanel != null) channelListPanel.resetHideTimer();
