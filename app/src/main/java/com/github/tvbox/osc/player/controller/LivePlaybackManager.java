@@ -431,11 +431,12 @@ if (isShiyiMode) {
     public int getCurrentSegmentIndex() { return currentSegmentIndex; }
     public long getCurrentSegmentEndTime() { return currentSegmentEndTime; }
 
-   // ==================== 新增成员变量 ====================
-private int playbackType = 0;           // 0=直播, 1=普通回放, 2=视频点播, 3=24h回放
-private boolean isCheckingM3u8 = false;
+// ==================== 新增成员变量 ====================
+private volatile int playbackType = 0;           // 0=直播, 1=普通回放, 2=视频点播, 3=24h回放
+private volatile boolean isCheckingM3u8 = false;
+private String lastCheckedUrl = null;            // 缓存已检查的URL，避免重复请求
 
-// ==================== 修改 getPlaybackType() ====================
+// ==================== 改进后的 getPlaybackType() ====================
 public int getPlaybackType() {
     if (isShiyiMode && isLive24hMode) return 3;
     if (isShiyiMode) return 1;
@@ -443,20 +444,29 @@ public int getPlaybackType() {
     // 当前是视频（duration > 0）
     if (currentChannel != null && getDuration() > 0) {
         
-        // 如果是 ExoPlayer，才做 m3u8 精确校验
-        if (isExoPlayer()) {
-            checkM3u8IsLive(currentChannel.getUrl());
-            return playbackType;   // 先返回上次的缓存结果（避免卡顿）
+        String url = currentChannel.getUrl();
+        
+        // 如果是 ExoPlayer 且是 m3u8，才做精确检查
+        if (isExoPlayer() && url != null && url.toLowerCase().contains(".m3u8")) {
+            
+            // 如果已经检查过相同URL，直接返回缓存结果
+            if (url.equals(lastCheckedUrl)) {
+                return playbackType;
+            }
+            
+            // 触发检查（只会检查一次）
+            checkM3u8IsLive(url);
+            return playbackType;        // 先返回当前缓存值（可能为0或2）
+            lastCheckedUrl =url
         } 
         else {
-            // 非 ExoPlayer，直接认为是视频
+            // 非Exo 或非m3u8，直接认为是视频
             return 2;
         }
     }
 
     return 0;   // 默认直播
 }
-
 // ==================== 新增方法 ====================
 private boolean isExoPlayer() {
     // 根据你当前播放器类型判断（你可以根据实际情况调整）
@@ -481,12 +491,6 @@ private void checkM3u8IsLive(String m3u8Url) {
                 boolean isLive = !content.contains("#EXT-X-ENDLIST");
                 
                 playbackType = isLive ? 0 : 2;
-
-                // 可选：通知界面刷新（比如重新判断是否显示进度条）
-                if (listener != null) {
-                    listener.onCurrentChannelChanged(currentChannel, false);
-                }
-            }
 
             @Override
             public void onError(Response<String> response) {
