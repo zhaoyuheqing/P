@@ -7,6 +7,7 @@ import android.text.TextUtils;
 import com.lzy.okgo.OkGo;
 import com.lzy.okgo.callback.AbsCallback;
 import com.lzy.okgo.model.Response;
+import okhttp3.Response;   // 注意是 okhttp3.Response
 
 import androidx.annotation.NonNull;
 
@@ -488,9 +489,9 @@ private void checkM3u8IsLive(String m3u8Url) {
         .execute(new AbsCallback<String>() {
 
             @Override
-            public String convertResponse(com.lzy.okgo.model.Response rawResponse) throws Throwable {
-                if (rawResponse.getBody() == null) return null;
-                return rawResponse.getBody().string();
+            public String convertResponse(okhttp3.Response rawResponse) throws Throwable {
+                if (rawResponse == null || rawResponse.body() == null) return null;
+                return rawResponse.body().string();
             }
 
             @Override
@@ -505,6 +506,9 @@ private void checkM3u8IsLive(String m3u8Url) {
                 boolean isLive = !content.contains("#EXT-X-ENDLIST");
                 playbackType = isLive ? 0 : 2;
 
+                if (listener != null) {
+                    listener.onCurrentChannelChanged(currentChannel, false);
+                }
             }
 
             @Override
@@ -513,8 +517,7 @@ private void checkM3u8IsLive(String m3u8Url) {
                 playbackType = 2;
             }
         });
-}
-    public long getDraggableRange() {
+}    public long getDraggableRange() {
         if (isLive24hMode) {
             return LiveConstants.LIVE_REPLAY_WINDOW_MS;
         } else if (getPlaybackType() == 2) {
