@@ -491,7 +491,7 @@ private void checkM3u8IsLive(String m3u8Url) {
 
                 boolean isLive = !content.contains("#EXT-X-ENDLIST");
                 
-                playbackType = isLive ? 0 : 2;
+                playbackType = isLive ? 0 : 2;}
 
             @Override
             public void onError(Response<String> response) {
