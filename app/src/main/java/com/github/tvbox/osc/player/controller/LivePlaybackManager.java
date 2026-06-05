@@ -505,10 +505,7 @@ private void checkM3u8IsLive(String m3u8Url) {
 
                 boolean isLive = !content.contains("#EXT-X-ENDLIST");
                 playbackType = isLive ? 0 : 2;
-
-                if (listener != null) {
-                    listener.onCurrentChannelChanged(currentChannel, false);
-                }
+        
             }
 
             @Override
@@ -517,7 +514,8 @@ private void checkM3u8IsLive(String m3u8Url) {
                 playbackType = 2;
             }
         });
-}    public long getDraggableRange() {
+}    
+    public long getDraggableRange() {
         if (isLive24hMode) {
             return LiveConstants.LIVE_REPLAY_WINDOW_MS;
         } else if (getPlaybackType() == 2) {
