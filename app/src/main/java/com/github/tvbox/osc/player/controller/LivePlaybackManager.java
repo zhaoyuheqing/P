@@ -476,15 +476,7 @@ private boolean isExoPlayer() {
     return getCurrentPlayerType() == 3;   // 假设你的 Exo 是类型 3
 }
 
-    public long getDraggableRange() {
-        if (isLive24hMode) {
-            return LiveConstants.LIVE_REPLAY_WINDOW_MS;
-        } else if (getPlaybackType() == 2) {
-            return getDuration();
-        } else {
-            return 0;
-        }
-   private void checkM3u8IsLive(String m3u8Url) {
+private void checkM3u8IsLive(String m3u8Url) {
     if (TextUtils.isEmpty(m3u8Url) || isCheckingM3u8) return;
     if (!m3u8Url.toLowerCase().contains(".m3u8")) return;
 
@@ -521,7 +513,16 @@ private boolean isExoPlayer() {
                 playbackType = 2;
             }
         });
-    } }
+}
+    public long getDraggableRange() {
+        if (isLive24hMode) {
+            return LiveConstants.LIVE_REPLAY_WINDOW_MS;
+        } else if (getPlaybackType() == 2) {
+            return getDuration();
+        } else {
+            return 0;
+        }
+    }
 
     public long getCurrentLiveTime() {
         if (!isShiyiMode) return System.currentTimeMillis();
