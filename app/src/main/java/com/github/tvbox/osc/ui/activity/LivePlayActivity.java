@@ -1314,7 +1314,7 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
         switch (playState) {
             case VideoView.STATE_PREPARED:
                 long duration = playbackManager.getDuration();
-                if (duration > 0) {
+                if (playbackManager.getPlaybackType()  > 0) {
                     isVOD = true;
                     llSeekBar.setVisibility(View.VISIBLE);
                     mSeekBar.setMax((int) duration);
