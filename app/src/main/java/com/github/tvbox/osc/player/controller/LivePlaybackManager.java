@@ -430,13 +430,70 @@ if (isShiyiMode) {
     public int getCurrentSegmentIndex() { return currentSegmentIndex; }
     public long getCurrentSegmentEndTime() { return currentSegmentEndTime; }
 
-    public int getPlaybackType() {
-        if (isShiyiMode && isLive24hMode) return 3;
-        if (isShiyiMode) return 1;
-        if (currentChannel != null && getDuration() > 0) return 2;
-        return 0;
+   // ==================== 新增成员变量 ====================
+private int playbackType = 0;           // 0=直播, 1=普通回放, 2=视频点播, 3=24h回放
+private boolean isCheckingM3u8 = false;
+
+// ==================== 修改 getPlaybackType() ====================
+public int getPlaybackType() {
+    if (isShiyiMode && isLive24hMode) return 3;
+    if (isShiyiMode) return 1;
+
+    // 当前是视频（duration > 0）
+    if (currentChannel != null && getDuration() > 0) {
+        
+        // 如果是 ExoPlayer，才做 m3u8 精确校验
+        if (isExoPlayer()) {
+            checkM3u8IsLive(currentChannel.getUrl());
+            return playbackType;   // 先返回上次的缓存结果（避免卡顿）
+        } 
+        else {
+            // 非 ExoPlayer，直接认为是视频
+            return 2;
+        }
     }
 
+    return 0;   // 默认直播
+}
+
+// ==================== 新增方法 ====================
+private boolean isExoPlayer() {
+    // 根据你当前播放器类型判断（你可以根据实际情况调整）
+    return getCurrentPlayerType() == 3;   // 假设你的 Exo 是类型 3
+}
+
+private void checkM3u8IsLive(String m3u8Url) {
+    if (TextUtils.isEmpty(m3u8Url) || isCheckingM3u8) return;
+    if (!m3u8Url.toLowerCase().contains(".m3u8")) return;
+
+    isCheckingM3u8 = true;
+
+    OkGo.<String>get(m3u8Url)
+        .tag(this)
+        .execute(new AbsCallback<String>() {
+            @Override
+            public void onSuccess(Response<String> response) {
+                isCheckingM3u8 = false;
+                String content = response.body();
+                if (content == null) return;
+
+                boolean isLive = !content.contains("#EXT-X-ENDLIST");
+                
+                playbackType = isLive ? 0 : 2;
+
+                // 可选：通知界面刷新（比如重新判断是否显示进度条）
+                if (listener != null) {
+                    listener.onCurrentChannelChanged(currentChannel, false);
+                }
+            }
+
+            @Override
+            public void onError(Response<String> response) {
+                isCheckingM3u8 = false;
+                playbackType = 2;   // 请求失败时默认按视频处理
+            }
+        });
+}
     public long getDraggableRange() {
         if (isLive24hMode) {
             return LiveConstants.LIVE_REPLAY_WINDOW_MS;
