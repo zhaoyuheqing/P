@@ -457,7 +457,7 @@ public int getPlaybackType() {
             // 触发检查（只会检查一次）
             checkM3u8IsLive(url);
             return playbackType;        // 先返回当前缓存值（可能为0或2）
-            lastCheckedUrl =url
+            lastCheckedUrl = url
         } 
         else {
             // 非Exo 或非m3u8，直接认为是视频
