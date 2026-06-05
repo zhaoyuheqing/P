@@ -3,6 +3,7 @@ package com.github.tvbox.osc.player.controller;
 import android.content.Context;
 import android.os.Handler;
 import android.view.MotionEvent;
+import android.text.TextUtils;
 
 import androidx.annotation.NonNull;
 
