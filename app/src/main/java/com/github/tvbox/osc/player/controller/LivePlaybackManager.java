@@ -4,6 +4,9 @@ import android.content.Context;
 import android.os.Handler;
 import android.view.MotionEvent;
 import android.text.TextUtils;
+import com.lzy.okgo.OkGo;
+import com.lzy.okgo.callback.AbsCallback;
+import com.lzy.okgo.model.Response;
 
 import androidx.annotation.NonNull;
 
@@ -458,7 +461,6 @@ public int getPlaybackType() {
             checkM3u8IsLive(url);
             lastCheckedUrl = url;
             return playbackType;        // 先返回当前缓存值（可能为0或2）
-            lastCheckedUrl = url;
         } 
         else {
             // 非Exo 或非m3u8，直接认为是视频
