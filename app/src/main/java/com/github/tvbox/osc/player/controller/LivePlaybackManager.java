@@ -486,6 +486,11 @@ private void checkM3u8IsLive(String m3u8Url) {
         .tag(this)
         .execute(new AbsCallback<String>() {
             @Override
+            public String convertResponse(Response response) throws Throwable {
+                // 直接返回字符串内容
+                return response.body().string();
+            }
+            @Override
             public void onSuccess(Response<String> response) {
                 isCheckingM3u8 = false;
                 String content = response.body();
