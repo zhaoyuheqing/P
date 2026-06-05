@@ -7,7 +7,6 @@ import android.text.TextUtils;
 import com.lzy.okgo.OkGo;
 import com.lzy.okgo.callback.AbsCallback;
 import com.lzy.okgo.model.Response;
-import okhttp3.Response;   // 注意是 okhttp3.Response
 
 import androidx.annotation.NonNull;
 
