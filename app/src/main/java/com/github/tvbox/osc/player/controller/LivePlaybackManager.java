@@ -476,40 +476,6 @@ private boolean isExoPlayer() {
     return getCurrentPlayerType() == 3;   // 假设你的 Exo 是类型 3
 }
 
-private void checkM3u8IsLive(String m3u8Url) {
-    if (TextUtils.isEmpty(m3u8Url) || isCheckingM3u8) return;
-    if (!m3u8Url.toLowerCase().contains(".m3u8")) return;
-
-    isCheckingM3u8 = true;
-
-    OkGo.<String>get(m3u8Url)
-        .tag(this)
-        .execute(new AbsCallback<String>() {
-            @Override
-            public String convertResponse(Response response) throws Throwable {
-                // 直接返回字符串内容
-                return response.body().string();
-            }
-            @Override
-            public void onSuccess(Response<String> response) {
-                isCheckingM3u8 = false;
-                String content = response.body();
-                if (content == null) {
-                    playbackType = 2;
-                    return;
-                }
-
-                boolean isLive = !content.contains("#EXT-X-ENDLIST");
-                
-                playbackType = isLive ? 0 : 2;
-}
-            @Override
-            public void onError(Response<String> response) {
-                isCheckingM3u8 = false;
-                playbackType = 2;   // 请求失败时默认按视频处理
-            }
-        });
-}
     public long getDraggableRange() {
         if (isLive24hMode) {
             return LiveConstants.LIVE_REPLAY_WINDOW_MS;
@@ -518,7 +484,44 @@ private void checkM3u8IsLive(String m3u8Url) {
         } else {
             return 0;
         }
-    }
+   private void checkM3u8IsLive(String m3u8Url) {
+    if (TextUtils.isEmpty(m3u8Url) || isCheckingM3u8) return;
+    if (!m3u8Url.toLowerCase().contains(".m3u8")) return;
+
+    isCheckingM3u8 = true;
+    lastCheckedUrl = m3u8Url;
+
+    OkGo.<String>get(m3u8Url)
+        .tag(this)
+        .execute(new AbsCallback<String>() {
+
+            @Override
+            public String convertResponse(com.lzy.okgo.model.Response rawResponse) throws Throwable {
+                if (rawResponse.getBody() == null) return null;
+                return rawResponse.getBody().string();
+            }
+
+            @Override
+            public void onSuccess(com.lzy.okgo.model.Response<String> response) {
+                isCheckingM3u8 = false;
+                String content = response.body();
+                if (content == null) {
+                    playbackType = 2;
+                    return;
+                }
+
+                boolean isLive = !content.contains("#EXT-X-ENDLIST");
+                playbackType = isLive ? 0 : 2;
+
+            }
+
+            @Override
+            public void onError(com.lzy.okgo.model.Response<String> response) {
+                isCheckingM3u8 = false;
+                playbackType = 2;
+            }
+        });
+    } }
 
     public long getCurrentLiveTime() {
         if (!isShiyiMode) return System.currentTimeMillis();
