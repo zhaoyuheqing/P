@@ -489,11 +489,11 @@ private void checkM3u8IsLive(String m3u8Url) {
             public void onSuccess(Response<String> response) {
                 isCheckingM3u8 = false;
                 String content = response.body();
-                if (content == null) return;
+                if (content == null) return;}
 
                 boolean isLive = !content.contains("#EXT-X-ENDLIST");
                 
-                playbackType = isLive ? 0 : 2;}
+                playbackType = isLive ? 0 : 2;
 
             @Override
             public void onError(Response<String> response) {
