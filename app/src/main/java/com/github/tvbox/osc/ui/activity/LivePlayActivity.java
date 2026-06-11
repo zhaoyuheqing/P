@@ -561,7 +561,7 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
 
     // ========== 底部栏相关方法 ==========
     private void updateBottomBarStaticInfo() {
-        String decodeType = PlayerHelper.getPlayerName(playbackManager.getCurrentPlayerType());
+        String decodeType = settingsPanel.getPlayerTypeName(playbackManager.getCurrentPlayerType());
         tvDecode.setText(decodeType);
         tvAudioTrack.setText("立体声");
         boolean canShiyi = currentLiveChannelItem != null && currentLiveChannelItem.getinclude_back();
