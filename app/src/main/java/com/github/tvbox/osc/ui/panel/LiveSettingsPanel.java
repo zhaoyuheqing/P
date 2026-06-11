@@ -408,6 +408,15 @@ public class LiveSettingsPanel {
         Context ctx = contextRef.get();
         if (ctx != null) Toast.makeText(ctx, message, Toast.LENGTH_SHORT).show();
     }
+    public String getPlayerTypeName(int playerTypeIndex) {
+    if (settingGroups.size() > 2) {  // 播放解码分组索引为2
+        List<LiveSettingItem> items = settingGroups.get(2).getLiveSettingItems();
+        if (playerTypeIndex >= 0 && playerTypeIndex < items.size()) {
+            return items.get(playerTypeIndex).getItemName();
+        }
+    }
+    return "";
+}
 
     public void destroy() {
         handler.removeCallbacks(hideRunnable);
