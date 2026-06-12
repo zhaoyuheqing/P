@@ -90,7 +90,7 @@ public class LiveSettingsPanel {
         itemsArrayList.add(new ArrayList<>(Arrays.asList("系统", "ijk硬解", "ijk软解", "exo")));
         itemsArrayList.add(new ArrayList<>(Arrays.asList("关", "5s", "10s", "15s", "20s", "25s", "30s")));
         // 偏好设置：显示时间、显示网速、换台反转、跨选分类、关闭密码、时移后继续下一段
-        itemsArrayList.add(new ArrayList<>(Arrays.asList("显示时间", "显示网速", "换台反转", "跨选分类", "关闭密码", "时移后继续下一段")));
+        itemsArrayList.add(new ArrayList<>(Arrays.asList("显示时间", "显示网速", "换台反转", "跨选分类", "关闭密码", "时移后继续下一段", "记忆解码", "记忆进度")));
         itemsArrayList.add(new ArrayList<>(Arrays.asList("列表历史")));
         itemsArrayList.add(new ArrayList<>(Arrays.asList("确定退出")));
 
@@ -133,6 +133,10 @@ public class LiveSettingsPanel {
                     prefItems.get(4).setItemSelected(Hawk.get(HawkConfig.LIVE_SKIP_PASSWORD, false));
                 if (prefItems.size() > 5)
                     prefItems.get(5).setItemSelected(Hawk.get(HawkConfig.SHIYI_AUTO_NEXT, false));
+                if (prefItems.size() > 6)
+                    prefItems.get(6).setItemSelected(Hawk.get(HawkConfig.MEMORY_DECODE, false));
+                if (prefItems.size() > 7)
+                    prefItems.get(7).setItemSelected(Hawk.get(HawkConfig.MEMORY_PROGRESS, false));
             }
         }
     }
@@ -265,6 +269,8 @@ public class LiveSettingsPanel {
             case 3: key = HawkConfig.LIVE_CROSS_GROUP; break;
             case 4: key = HawkConfig.LIVE_SKIP_PASSWORD; break;
             case 5: key = HawkConfig.SHIYI_AUTO_NEXT; break;
+            case 5: key = HawkConfig.MEMORY_DECODE; break;
+            case 5: key = HawkConfig.MEMORY_PROGRESS; break;
         }
         if (key == null) return;
         boolean newValue = !Hawk.get(key, false);
