@@ -269,8 +269,8 @@ public class LiveSettingsPanel {
             case 3: key = HawkConfig.LIVE_CROSS_GROUP; break;
             case 4: key = HawkConfig.LIVE_SKIP_PASSWORD; break;
             case 5: key = HawkConfig.SHIYI_AUTO_NEXT; break;
-            case 5: key = HawkConfig.MEMORY_DECODE; break;
-            case 5: key = HawkConfig.MEMORY_PROGRESS; break;
+            case 6: key = HawkConfig.MEMORY_DECODE; break;
+            case 7: key = HawkConfig.MEMORY_PROGRESS; break;
         }
         if (key == null) return;
         boolean newValue = !Hawk.get(key, false);
