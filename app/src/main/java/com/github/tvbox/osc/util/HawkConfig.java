@@ -63,6 +63,8 @@ public class HawkConfig {
     public static final String LIVE_SKIP_PASSWORD = "live_skip_password";
     public static final String LIVE_PLAYER_TYPE = "live_player_type";
     public static final String SHIYI_AUTO_NEXT = "shiyi_auto_next"; // 时移结束后继续下一段
+    public static final String MEMORY_DECODE = "memory_decode";
+public static final String MEMORY_PROGRESS = "memory_progress";
 
     public static boolean isDebug() {
         return Hawk.get(DEBUG_OPEN, false);
