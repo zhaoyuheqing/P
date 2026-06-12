@@ -437,7 +437,7 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
         tvCanShiyi = findViewById(R.id.tv_can_shiyi);
         tvRemainingTime = findViewById(R.id.tv_remaining_time);
 
-        updateBottomBarStaticInfo();
+        
         updateStaticProgressVisibility();
 
         // 设置面板
@@ -514,6 +514,7 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
                 return playbackManager != null ? playbackManager.getCurrentScale() : 0;
             }
         });
+        updateBottomBarStaticInfo();
 
         // 左侧列表面板
         LinearLayout tvLeftChannelListLayout = findViewById(R.id.tvLeftChannelListLayout);
