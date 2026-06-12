@@ -270,7 +270,19 @@ if (isShiyiMode) {
         videoView.release();
         currentChannel = channel;
         currentChannel.setinclude_back(currentChannel.getUrl().indexOf(LiveConstants.PLTV_FLAG + "8888") != -1);
+        // ========== 新增：记忆解码逻辑 ==========
+    boolean memoryDecode = Hawk.get(HawkConfig.MEMORY_DECODE, false);
+    if (memoryDecode) {
+        String groupName = Hawk.get(HawkConfig.LIVE_CHANNEL_GROUP, "");
+        if (!TextUtils.isEmpty(groupName)) {
+            playerManager.getLiveGroupPlayer(videoView, groupName);
+        } else {
+            playerManager.getLiveChannelPlayer(videoView, currentChannel.getChannelName());
+        }
+    } else {
         playerManager.getLiveChannelPlayer(videoView, currentChannel.getChannelName());
+    }
+    // =====================================
         this.currentPlayerType = playerManager.getLivePlayerType();
         this.currentScale = playerManager.getLivePlayerScale();
         videoView.setUrl(currentChannel.getUrl(), buildPlayHeaders(currentChannel.getUrl()));
@@ -309,7 +321,20 @@ if (isShiyiMode) {
     public void changePlayerType(int typeIndex) {
         if (videoView == null || currentChannel == null) return;
         videoView.release();
+        // ========== 新增：记忆解码逻辑 ==========
+    boolean memoryDecode = Hawk.get(HawkConfig.MEMORY_DECODE, false);
+    if (memoryDecode) {
+        String groupName = Hawk.get(HawkConfig.LIVE_CHANNEL_GROUP, "");
+        if (!TextUtils.isEmpty(groupName)) {
+            playerManager.changeLivegroupPlayerType(videoView, typeIndex, currentChannel.getChannelName());        }
+        else {
+            playerManager.changeLivePlayerType(videoView, typeIndex, currentChannel.getChannelName());
+        }
+    } else {
         playerManager.changeLivePlayerType(videoView, typeIndex, currentChannel.getChannelName());
+    }
+    // =====================================
+        playerManager.changeLivegroupPlayerType(videoView, typeIndex, currentChannel.getChannelName());
         this.currentPlayerType = playerManager.getLivePlayerType();
         String url = currentChannel.getUrl();
         videoView.setUrl(url, buildPlayHeaders(url));
