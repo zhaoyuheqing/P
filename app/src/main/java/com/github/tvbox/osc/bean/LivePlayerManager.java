@@ -159,7 +159,7 @@ public class LivePlayerManager {
 
         currentPlayerConfig = playerConfig;
     }
-    public void changeLivePlayerType(VideoView videoView, int playerType, String groupName) {
+    public void changeLivegroupPlayerType(VideoView videoView, int playerType, String groupName) {
         JSONObject playerConfig = currentPlayerConfig;
         try {
             switch (playerType) {
