@@ -67,6 +67,30 @@ public class LivePlayerManager {
 
         currentPlayerConfig = playerConfig;
     }
+    public void getLivegroupPlayer(VideoView videoView, String groupName) {
+        JSONObject playerConfig = Hawk.get(groupName, null);
+        if (playerConfig == null) {
+            if (!currentPlayerConfig.toString().equals(defaultPlayerConfig.toString()))
+                getDefaultLiveChannelPlayer(videoView);
+            return;
+        }
+        if (playerConfig.toString().equals(currentPlayerConfig.toString()))
+            return;
+
+        try {
+            if (playerConfig.getInt("pl") == currentPlayerConfig.getInt("pl")
+                    && playerConfig.getInt("pr") == currentPlayerConfig.getInt("pr")
+                    && playerConfig.getString("ijk").equals(currentPlayerConfig.getString("ijk"))) {
+                videoView.setScreenScaleType(playerConfig.getInt("sc"));
+            } else {
+                PlayerHelper.updateCfg(videoView, playerConfig);
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        currentPlayerConfig = playerConfig;
+    }
 
     public int getLivePlayerType() {
         int playerTypeIndex = 0;
@@ -132,6 +156,39 @@ public class LivePlayerManager {
             Hawk.delete(channelName);
         else
             Hawk.put(channelName, playerConfig);
+
+        currentPlayerConfig = playerConfig;
+    }
+    public void changeLivePlayerType(VideoView videoView, int playerType, String groupName) {
+        JSONObject playerConfig = currentPlayerConfig;
+        try {
+            switch (playerType) {
+                case 0:
+                    playerConfig.put("pl", 0);
+                    playerConfig.put("ijk", "软解码");
+                    break;
+                case 1:
+                    playerConfig.put("pl", 1);
+                    playerConfig.put("ijk", "硬解码");
+                    break;
+                case 2:
+                    playerConfig.put("pl", 1);
+                    playerConfig.put("ijk", "软解码");
+                    break;
+                case 3:
+                    playerConfig.put("pl", 2);
+                    playerConfig.put("ijk", "软解码");
+                    break;
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        PlayerHelper.updateCfg(videoView, playerConfig);
+
+        if (playerConfig.toString().equals(defaultPlayerConfig.toString()))
+            Hawk.delete(groupName);
+        else
+            Hawk.put(groupName, playerConfig);
 
         currentPlayerConfig = playerConfig;
     }
