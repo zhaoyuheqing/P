@@ -275,7 +275,7 @@ if (isShiyiMode) {
     if (memoryDecode) {
         String groupName = Hawk.get(HawkConfig.LIVE_CHANNEL_GROUP, "");
         if (!TextUtils.isEmpty(groupName)) {
-            playerManager.getLiveGroupPlayer(videoView, groupName);
+            playerManager.getLivegroupPlayer(videoView, groupName);
         } else {
             playerManager.getLiveChannelPlayer(videoView, currentChannel.getChannelName());
         }
@@ -334,7 +334,6 @@ if (isShiyiMode) {
         playerManager.changeLivePlayerType(videoView, typeIndex, currentChannel.getChannelName());
     }
     // =====================================
-        playerManager.changeLivegroupPlayerType(videoView, typeIndex, currentChannel.getChannelName());
         this.currentPlayerType = playerManager.getLivePlayerType();
         String url = currentChannel.getUrl();
         videoView.setUrl(url, buildPlayHeaders(url));
