@@ -326,7 +326,7 @@ if (isShiyiMode) {
     if (memoryDecode) {
         String groupName = Hawk.get(HawkConfig.LIVE_CHANNEL_GROUP, "");
         if (!TextUtils.isEmpty(groupName)) {
-            playerManager.changeLivegroupPlayerType(videoView, typeIndex, currentChannel.getChannelName());        }
+            playerManager.changeLivegroupPlayerType(videoView, typeIndex, groupName );        }
         else {
             playerManager.changeLivePlayerType(videoView, typeIndex, currentChannel.getChannelName());
         }
