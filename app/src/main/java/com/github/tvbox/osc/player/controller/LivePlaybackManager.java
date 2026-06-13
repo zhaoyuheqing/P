@@ -343,7 +343,17 @@ if (isShiyiMode) {
 
     public void changeScale(int scaleIndex) {
         if (videoView != null && currentChannel != null) {
+            boolean memoryDecode = Hawk.get(HawkConfig.MEMORY_DECODE, false);
+    if (memoryDecode) {
+        String groupName = Hawk.get(HawkConfig.LIVE_CHANNEL_GROUP, "");
+        if (!TextUtils.isEmpty(groupName)) {
+            playerManager.changeLivegroupPlayerScale(videoView, scaleIndex, currentChannel.getChannelName());
+        } else {
             playerManager.changeLivePlayerScale(videoView, scaleIndex, currentChannel.getChannelName());
+        }
+    } else {
+        playerManager.changeLivePlayerScale(videoView, scaleIndex, currentChannel.getChannelName());
+    }
             this.currentScale = scaleIndex;
             if (listener != null) listener.onCurrentChannelChanged(currentChannel, true);
         }
