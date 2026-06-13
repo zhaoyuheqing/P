@@ -209,4 +209,20 @@ public class LivePlayerManager {
 
         currentPlayerConfig = playerConfig;
     }
+    public void changeLivegroupPlayerScale(@NonNull VideoView videoView, int playerScale, String groupName){
+        videoView.setScreenScaleType(playerScale);
+
+        JSONObject playerConfig = currentPlayerConfig;
+        try {
+            playerConfig.put("sc", playerScale);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        if (playerConfig.toString().equals(defaultPlayerConfig.toString()))
+            Hawk.delete(groupName);
+        else
+            Hawk.put(groupName, playerConfig);
+
+        currentPlayerConfig = playerConfig;
+    }
 }
