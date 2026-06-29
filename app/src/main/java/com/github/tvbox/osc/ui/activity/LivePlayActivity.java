@@ -420,7 +420,7 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
     public long getSavedProgress(String key) {
         // 只有开启记忆进度 + 是点播类型，才恢复进度
         if (Hawk.get(HawkConfig.MEMORY_PROGRESS, false)) {
-            if (playbackManager != null && playbackManager.getPlaybackType() == 2) {
+            if (playbackManager != null) {
                 return Hawk.get("vod_progress_" + key, 0L);
             }
         }
