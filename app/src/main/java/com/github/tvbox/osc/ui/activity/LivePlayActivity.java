@@ -408,24 +408,25 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
         mVideoView.setProgressManager(new ProgressManager() {
     @Override
     public void saveProgress(String key, long progress) {
-        // 只有用户开启了“记忆进度”才保
-            if (playbackManager != null) {
+        // 只有用户开启了“记忆进度”才保存
+        if (Hawk.get(HawkConfig.MEMORY_PROGRESS, false)) {
+            if (playbackManager != null && playbackManager.getPlaybackType() == 2) {
                 Hawk.put("vod_progress_" + key, progress);
             }
-        
+        }
     }
 
     @Override
     public long getSavedProgress(String key) {
         // 只有开启记忆进度 + 是点播类型，才恢复进度
-            if (playbackManager != null) {
+        if (Hawk.get(HawkConfig.MEMORY_PROGRESS, false)) {
+            if (playbackManager != null && playbackManager.getPlaybackType() == 2) {
                 return Hawk.get("vod_progress_" + key, 0L);
             }
-        
+        }
         return 0L;   // 直播、时移、未开启记忆 均从头播放
     }
 });
-
         tvSelectedChannel = findViewById(R.id.tv_selected_channel);
         tv_size = findViewById(R.id.tv_size);
         tv_source = findViewById(R.id.tv_source);
