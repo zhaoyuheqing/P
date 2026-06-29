@@ -84,6 +84,7 @@ import java.util.TimeZone;
 import kotlin.Pair;
 import xyz.doikki.videoplayer.player.VideoView;
 import xyz.doikki.videoplayer.util.PlayerUtils;
+import xyz.doikki.videoplayer.player.ProgressManager;
 
 public class LivePlayActivity extends BaseActivity implements LiveChannelListPanel.ChannelListListener {
 
