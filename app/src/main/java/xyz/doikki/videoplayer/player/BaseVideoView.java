@@ -373,6 +373,7 @@ public class BaseVideoView<P extends AbstractPlayer> extends FrameLayout
      */
     public void release() {
         if (!isInIdleState()) {
+        saveProgress();
             //释放播放器
             if (mMediaPlayer != null) {
                 mMediaPlayer.release();
@@ -400,7 +401,7 @@ public class BaseVideoView<P extends AbstractPlayer> extends FrameLayout
             //关闭屏幕常亮
             mPlayerContainer.setKeepScreenOn(false);
             //保存播放进度
-            saveProgress();
+            
             //重置播放进度
             mCurrentPosition = 0;
             //切换转态
