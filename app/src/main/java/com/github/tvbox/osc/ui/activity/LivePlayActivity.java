@@ -404,6 +404,29 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
 
             
         });
+        // 在 LivePlayActivity 的 init() 方法中添加以下代码
+mVideoView.setProgressManager(new ProgressManager() {
+    @Override
+    public void saveProgress(String key, long progress) {
+        // 判断当前播放类型：只有点播（type == 2）才保存进度
+        if (playbackManager != null && playbackManager.getPlaybackType() == 2) {
+            // 用 "vod_progress_" 作为前缀，避免与其他模块的 key 冲突
+            Hawk.put("vod_progress_" + key, progress);
+        }
+        // 直播（type == 0）、时移（type == 1）、24h回放（type == 3）均不保存
+    }
+
+    @Override
+    public long getSavedProgress(String key) {
+        // 只有点播才读取进度
+        if (playbackManager != null && playbackManager.getPlaybackType() == 2) {
+            // 如果之前存过，返回具体数值；否则返回 0（从头播放）
+            return Hawk.get("vod_progress_" + key, 0L);
+        }
+        // 非点播模式一律返回 0，表示不续播
+        return 0L;
+    }
+});
 
         tvSelectedChannel = findViewById(R.id.tv_selected_channel);
         tv_size = findViewById(R.id.tv_size);
