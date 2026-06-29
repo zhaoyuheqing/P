@@ -409,7 +409,7 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
     @Override
     public void saveProgress(String key, long progress) {
         // 只有用户开启了“记忆进度”才保
-            if (playbackManager != null && playbackManager.getPlaybackType() == 2) {
+            if (playbackManager != null) {
                 Hawk.put("vod_progress_" + key, progress);
             }
         
@@ -418,7 +418,7 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
     @Override
     public long getSavedProgress(String key) {
         // 只有开启记忆进度 + 是点播类型，才恢复进度
-            if (playbackManager != null && playbackManager.getPlaybackType() == 2) {
+            if (playbackManager != null) {
                 return Hawk.get("vod_progress_" + key, 0L);
             }
         
