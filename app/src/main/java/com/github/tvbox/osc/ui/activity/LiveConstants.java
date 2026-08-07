@@ -8,11 +8,11 @@ public class LiveConstants {
     // EPG 缓存相关
     public static final String EPG_CACHE_DIR = "epg_cache";
     public static final long EPG_CACHE_VALID_TIME = 24 * 60 * 60 * 1000;
-    public static final int MAX_EPG_MEMORY_CACHE = 10;
+    public static final int MAX_EPG_MEMORY_CACHE = 20;
     public static final int EPG_MAX_ITEMS = 50;
 
     // 预加载相关
-    public static final int HIGH_PRIORITY_THREADS = 2;
+    public static final int HIGH_PRIORITY_THREADS = 9;
     public static final int LOW_PRIORITY_THREADS = 1;
     public static final int PRELOAD_DELAY_MS = 5000;
     public static final int PRELOAD_SLEEP_MS = 150;
