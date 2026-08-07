@@ -67,6 +67,7 @@ public class EpgCacheHelper {
         this.epgBaseUrl = epgBaseUrl;
         this.highPriorityExecutor = Executors.newFixedThreadPool(LiveConstants.HIGH_PRIORITY_THREADS);
         this.lowPriorityExecutor = Executors.newFixedThreadPool(LiveConstants.LOW_PRIORITY_THREADS);
+        cleanExpiredCache();
     }
     
     public void setLogoCallback(LogoCallback callback) {
@@ -246,7 +247,7 @@ public class EpgCacheHelper {
             JSONObject cacheData = new JSONObject(content.toString());
             long timestamp = cacheData.optLong("timestamp", 0);
             if (System.currentTimeMillis() - timestamp > LiveConstants.EPG_CACHE_VALID_TIME) {
-                cacheFile.delete();
+                //cacheFile.delete();
                 return null;
             }
             String logoUrl = cacheData.optString("logoUrl", null);
@@ -292,6 +293,37 @@ public class EpgCacheHelper {
             return null;
         }
     }
+    /**
+ * 清理过期的 EPG 缓存文件（删除 6 天前的文件）
+ * 建议在启动时调用一次
+ */
+public void cleanExpiredCache() {
+    lowPriorityExecutor.execute(() -> {
+        try {
+            File dir = new File(context.getFilesDir(), LiveConstants.EPG_CACHE_DIR);
+            if (!dir.exists() || !dir.isDirectory()) return;
+
+            // 计算 6 天前的时间戳
+            long expireTime = System.currentTimeMillis() - (6L * 24 * 60 * 60 * 1000);
+
+            File[] files = dir.listFiles();
+            if (files == null) return;
+
+            int deleteCount = 0;
+            for (File file : files) {
+                if (file.isFile() && file.lastModified() < expireTime) {
+                    if (file.delete()) {
+                        deleteCount++;
+                    }
+                }
+            }
+            // 可选：打印日志
+            // Log.d("EpgCacheHelper", "清理过期EPG缓存文件数量: " + deleteCount);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    });
+}
     
     private void saveToFileCache(String channelName, String date, ArrayList<Epginfo> newEpgList, String logoUrl) {
         if (newEpgList == null || newEpgList.isEmpty()) return;
