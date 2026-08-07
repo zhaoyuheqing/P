@@ -1208,7 +1208,7 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
                     for (LiveChannelItem ch : g.getLiveChannels())
                         allNames.add(ch.getChannelName());
                 String currentName = currentLiveChannelItem != null ? currentLiveChannelItem.getChannelName() : "";
-                mHandler.postDelayed(() -> epgCacheHelper.preloadOtherChannels(allNames, currentName), LiveConstants.PRELOAD_DELAY_MS);
+                //mHandler.postDelayed(() -> epgCacheHelper.preloadOtherChannels(allNames, currentName), LiveConstants.PRELOAD_DELAY_MS);
             }
         }
     }
