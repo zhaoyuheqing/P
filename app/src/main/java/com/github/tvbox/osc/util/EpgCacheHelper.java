@@ -775,3 +775,46 @@ private ArrayList<Epginfo> convertJsonArrayToEpgList(JSONArray array, String dat
     }
     return list;
 }
+/** 0=尚未在本进程触发下载；1=本进程已触发过（避免同一进程内重复点多次） */
+private int xmlDayEpgDownloadFlag = 0;
+/** 是否存在「今天 + 3 天」的按天文件且非空（说明全量 XML 已成功落盘） */
+private boolean hasDayFileAfter3Days() {
+    try {
+        Calendar cal = Calendar.getInstance();
+        cal.add(Calendar.DAY_OF_MONTH, 3);
+        String dateStr = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD, Locale.getDefault())
+                .format(cal.getTime());
+        File file = new File(context.getFilesDir(),
+                LiveConstants.EPG_CACHE_DIR + "/" + DAY_EPG_PREFIX + dateStr + ".json");
+        return file.exists() && file.length() > 100;
+    } catch (Exception e) {
+        return false;
+    }
+}
+public ArrayList<Epginfo> getEpg(String channelName, String dateStr) {
+    // 1. 内存
+    ArrayList<Epginfo> cached = getFromMemoryCache(channelName, dateStr);
+    if (cached != null && !cached.isEmpty()) return cached;
+
+    // 2. 按天 XML 文件
+    cached = getEpgFromDayFile(channelName, dateStr);
+    if (cached != null && !cached.isEmpty()) {
+        putToMemoryCache(channelName, dateStr, cached);
+        return cached;
+    }
+
+    // 3. 没有「3 天后」的数据 → 说明全量没下成功或没下过
+    //    - 有数据：下次启动不会重下（本方法不会进下载）
+    //    - 没数据：每次启动都会下（flag 每次进程从 0 开始）
+    if (!hasDayFileAfter3Days()) {
+        if (xmlDayEpgDownloadFlag == 0) {
+            xmlDayEpgDownloadFlag = 1;   // 本进程只触发一次，避免连点重复下
+            // 地址直接用输入的 epgBaseUrl
+            if (epgBaseUrl != null && !epgBaseUrl.trim().isEmpty()) {
+                downloadAndBuildDayEpg(epgBaseUrl.trim());
+            }
+        }
+    }
+
+    return null;
+}
