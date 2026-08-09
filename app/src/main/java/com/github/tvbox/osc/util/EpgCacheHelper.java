@@ -107,7 +107,7 @@ public class EpgCacheHelper {
             mainHandler.post(() -> callback.onSuccess(finalChannelName, finalDate, finalCached));
             return;
         }
-        ArrayList<Epginfo> cached = getEpg(channelName, dateStr);
+        cached = getEpg(channelName, dateStr);
         if (cached != null && !cached.isEmpty()) {
             final String finalChannelName = channelName;
             final Date finalDate = date;
@@ -507,7 +507,7 @@ public void cleanExpiredCache() {
             }
         }
     }
-}// ===================== 类成员里加常量 =====================
+// ===================== 类成员里加常量 =====================
 /** 按天全量 XML 缓存文件前缀：epg_day_2026-08-09.json */
 private static final String DAY_EPG_PREFIX = "epg_day_";
 
@@ -519,17 +519,36 @@ private static final String DAY_EPG_PREFIX = "epg_day_";
  */
 public void downloadAndBuildDayEpg(String sourceUrl) {
     if (sourceUrl == null || sourceUrl.trim().isEmpty()) return;
+
     lowPriorityExecutor.execute(() -> {
         try {
+            // 开始提示
+            mainHandler.post(() ->
+                    android.widget.Toast.makeText(context, "正在更新节目单…", android.widget.Toast.LENGTH_SHORT).show()
+            );
+
             String content = downloadContent(sourceUrl);
-            if (content == null || content.isEmpty()) return;
+            if (content == null || content.isEmpty()) {
+                mainHandler.post(() ->
+                        android.widget.Toast.makeText(context, "节目单下载失败", android.widget.Toast.LENGTH_SHORT).show()
+                );
+                return;
+            }
+
             parseXmltvAndSaveByDay(content);
+
+            // 写盘完成提示
+            mainHandler.post(() ->
+                    android.widget.Toast.makeText(context, "节目单已保存到本地", android.widget.Toast.LENGTH_SHORT).show()
+            );
         } catch (Exception e) {
             e.printStackTrace();
+            mainHandler.post(() ->
+                    android.widget.Toast.makeText(context, "节目单更新失败", android.widget.Toast.LENGTH_SHORT).show()
+            );
         }
     });
 }
-
 private String downloadContent(String url) {
     try {
         Request request = new Request.Builder().url(url).build();
@@ -827,3 +846,4 @@ public ArrayList<Epginfo> getEpg(String channelName, String dateStr) {
 
     return null;
 }
+    }
