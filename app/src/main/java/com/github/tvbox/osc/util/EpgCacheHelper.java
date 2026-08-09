@@ -809,7 +809,7 @@ private int xmlDayEpgDownloadFlag = 0;
 private boolean hasDayFileAfter3Days() {
     try {
         Calendar cal = Calendar.getInstance();
-        cal.add(Calendar.DAY_OF_MONTH, 3);
+        cal.add(Calendar.DAY_OF_MONTH, 2);
         String dateStr = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD, Locale.getDefault())
                 .format(cal.getTime());
         File file = new File(context.getFilesDir(),
