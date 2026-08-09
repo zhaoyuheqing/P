@@ -31,6 +31,14 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import android.util.Xml;
+import org.xmlpull.v1.XmlPullParser;
+import java.io.StringReader;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Locale;
+
+
 
 public class EpgCacheHelper {
     private final Context context;
@@ -490,4 +498,280 @@ public void cleanExpiredCache() {
             }
         }
     }
+}// ===================== 类成员里加常量 =====================
+/** 按天全量 XML 缓存文件前缀：epg_day_2026-08-09.json */
+private static final String DAY_EPG_PREFIX = "epg_day_";
+
+// ===================== 下面整段直接放进 EpgCacheHelper 类里 =====================
+
+/**
+ * 下载 XMLTV 全量源，用 XmlPullParser 解析，按天写成约 9 个小文件。
+ * 例：epgCacheHelper.downloadAndBuildDayEpg("https://s.102031.xyz/xml/a1999882e.xml");
+ */
+public void downloadAndBuildDayEpg(String sourceUrl) {
+    if (sourceUrl == null || sourceUrl.trim().isEmpty()) return;
+    lowPriorityExecutor.execute(() -> {
+        try {
+            String content = downloadContent(sourceUrl);
+            if (content == null || content.isEmpty()) return;
+            parseXmltvAndSaveByDay(content);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    });
+}
+
+private String downloadContent(String url) {
+    try {
+        Request request = new Request.Builder().url(url).build();
+        try (okhttp3.Response response = getHttpClient().newCall(request).execute()) {
+            if (response.isSuccessful() && response.body() != null) {
+                return response.body().string();
+            }
+        }
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+    return null;
+}
+
+/**
+ * XmlPullParser 按标签解析：
+ * 1. channel + display-name → id 到频道名映射
+ * 2. programme 取 start/stop/channel + title
+ * 3. 按天聚合，跨天则写文件并释放内存
+ */
+private void parseXmltvAndSaveByDay(String xmlContent) {
+    Map<String, String> channelIdToName = new HashMap<>();
+    Map<String, JSONArray> currentDayMap = new LinkedHashMap<>();
+    String currentDate = null;
+
+    try {
+        XmlPullParser parser = Xml.newPullParser();
+        parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false);
+        parser.setInput(new StringReader(xmlContent));
+
+        int eventType = parser.getEventType();
+        String currentChannelId = null;
+        String progStart = null;
+        String progStop = null;
+        String progChannelId = null;
+        String progTitle = null;
+        boolean inProgramme = false;
+
+        while (eventType != XmlPullParser.END_DOCUMENT) {
+            String tag = parser.getName();
+            switch (eventType) {
+                case XmlPullParser.START_TAG:
+                    if ("channel".equalsIgnoreCase(tag)) {
+                        currentChannelId = parser.getAttributeValue(null, "id");
+                    } else if ("display-name".equalsIgnoreCase(tag) && currentChannelId != null) {
+                        String name = parser.nextText();
+                        if (name != null) {
+                            name = name.trim();
+                            if (!name.isEmpty() && !channelIdToName.containsKey(currentChannelId)) {
+                                channelIdToName.put(currentChannelId, name);
+                            }
+                        }
+                    } else if ("programme".equalsIgnoreCase(tag)) {
+                        inProgramme = true;
+                        progStart = parser.getAttributeValue(null, "start");
+                        progStop = parser.getAttributeValue(null, "stop");
+                        progChannelId = parser.getAttributeValue(null, "channel");
+                        progTitle = null;
+                    } else if (inProgramme && "title".equalsIgnoreCase(tag)) {
+                        String t = parser.nextText();
+                        if (t != null) progTitle = t.trim();
+                    }
+                    break;
+
+                case XmlPullParser.END_TAG:
+                    if ("channel".equalsIgnoreCase(tag)) {
+                        currentChannelId = null;
+                    } else if ("programme".equalsIgnoreCase(tag) && inProgramme) {
+                        inProgramme = false;
+                        if (progStart != null && progStart.length() >= 12 && progChannelId != null) {
+                            String digits = extractDigits(progStart);
+                            if (digits.length() >= 12) {
+                                String dateStr = digits.substring(0, 4) + "-" + digits.substring(4, 6) + "-" + digits.substring(6, 8);
+                                String start = digits.substring(8, 10) + ":" + digits.substring(10, 12);
+                                String end = "23:59";
+                                if (progStop != null) {
+                                    String stopDigits = extractDigits(progStop);
+                                    if (stopDigits.length() >= 12) {
+                                        end = stopDigits.substring(8, 10) + ":" + stopDigits.substring(10, 12);
+                                    }
+                                }
+                                String channelName = channelIdToName.get(progChannelId);
+                                if (channelName == null || channelName.isEmpty()) {
+                                    channelName = progChannelId;
+                                }
+                                String title = (progTitle == null || progTitle.isEmpty())
+                                        ? LiveConstants.NO_PROGRAM : progTitle;
+
+                                if (currentDate != null && !currentDate.equals(dateStr)) {
+                                    saveOneDayFile(currentDate, currentDayMap);
+                                    currentDayMap.clear();
+                                }
+                                currentDate = dateStr;
+
+                                JSONArray list = currentDayMap.get(channelName);
+                                if (list == null) {
+                                    list = new JSONArray();
+                                    currentDayMap.put(channelName, list);
+                                }
+                                JSONObject item = new JSONObject();
+                                item.put("start", start);
+                                item.put("end", end);
+                                item.put("title", title);
+                                list.put(item);
+                            }
+                        }
+                        progStart = null;
+                        progStop = null;
+                        progChannelId = null;
+                        progTitle = null;
+                    }
+                    break;
+            }
+            eventType = parser.next();
+        }
+
+        if (currentDate != null && !currentDayMap.isEmpty()) {
+            saveOneDayFile(currentDate, currentDayMap);
+            currentDayMap.clear();
+        }
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+}
+
+/** 从 XMLTV 时间串中提取数字（兼容 20260809004700 +0800） */
+private String extractDigits(String raw) {
+    if (raw == null) return "";
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < raw.length(); i++) {
+        char c = raw.charAt(i);
+        if (c >= '0' && c <= '9') sb.append(c);
+        else if (sb.length() >= 14) break;
+    }
+    return sb.toString();
+}
+
+private void saveOneDayFile(String dateStr, Map<String, JSONArray> dayMap) {
+    if (dayMap == null || dayMap.isEmpty()) return;
+    try {
+        File dir = new File(context.getFilesDir(), LiveConstants.EPG_CACHE_DIR);
+        if (!dir.exists()) dir.mkdirs();
+
+        File file = new File(dir, DAY_EPG_PREFIX + dateStr + ".json");
+        File temp = new File(dir, DAY_EPG_PREFIX + dateStr + ".json.tmp");
+
+        JSONObject root = new JSONObject();
+        for (Map.Entry<String, JSONArray> entry : dayMap.entrySet()) {
+            root.put(entry.getKey(), sortJsonArrayByStart(entry.getValue()));
+        }
+
+        try (FileWriter writer = new FileWriter(temp)) {
+            writer.write(root.toString());
+        }
+        if (file.exists()) file.delete();
+        temp.renameTo(file);
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+}
+
+private JSONArray sortJsonArrayByStart(JSONArray array) {
+    if (array == null || array.length() <= 1) return array;
+    try {
+        List<JSONObject> list = new ArrayList<>();
+        for (int i = 0; i < array.length(); i++) {
+            list.add(array.getJSONObject(i));
+        }
+        list.sort((a, b) -> a.optString("start", "00:00").compareTo(b.optString("start", "00:00")));
+        JSONArray result = new JSONArray();
+        for (JSONObject obj : list) result.put(obj);
+        return result;
+    } catch (Exception e) {
+        return array;
+    }
+}
+
+/**
+ * 从按天文件中取某频道某天节目
+ */
+public ArrayList<Epginfo> getEpgFromDayFile(String channelName, String dateStr) {
+    if (channelName == null || dateStr == null) return null;
+    try {
+        File file = new File(context.getFilesDir(),
+                LiveConstants.EPG_CACHE_DIR + "/" + DAY_EPG_PREFIX + dateStr + ".json");
+        if (!file.exists() || file.length() < 10) return null;
+
+        StringBuilder sb = new StringBuilder();
+        try (FileReader reader = new FileReader(file)) {
+            char[] buf = new char[8192];
+            int len;
+            while ((len = reader.read(buf)) != -1) {
+                sb.append(buf, 0, len);
+            }
+        }
+
+        JSONObject root = new JSONObject(sb.toString());
+        JSONArray array = root.optJSONArray(channelName);
+        if (array == null || array.length() == 0) {
+            String target = channelName.trim().toLowerCase(Locale.ROOT);
+            Iterator<String> keys = root.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                if (key != null && key.trim().toLowerCase(Locale.ROOT).equals(target)) {
+                    array = root.optJSONArray(key);
+                    break;
+                }
+            }
+        }
+        if (array == null || array.length() == 0) return null;
+        return convertJsonArrayToEpgList(array, dateStr);
+    } catch (Exception e) {
+        e.printStackTrace();
+        return null;
+    }
+}
+
+private ArrayList<Epginfo> convertJsonArrayToEpgList(JSONArray array, String dateStr) {
+    ArrayList<Epginfo> list = new ArrayList<>();
+    try {
+        Date baseDate = parseDate(dateStr);
+        for (int i = 0; i < array.length(); i++) {
+            JSONObject obj = array.getJSONObject(i);
+            String title = obj.optString("title", LiveConstants.NO_PROGRAM);
+            String startStr = obj.optString("start", LiveConstants.DEFAULT_START_TIME);
+            String endStr = obj.optString("end", LiveConstants.DEFAULT_END_TIME);
+
+            Date startDateTime = combineDateAndTime(baseDate, startStr);
+            Date endDateTime = combineDateAndTime(baseDate, endStr);
+            if (endDateTime.before(startDateTime)) {
+                Calendar cal = Calendar.getInstance();
+                cal.setTime(endDateTime);
+                cal.add(Calendar.DAY_OF_MONTH, 1);
+                endDateTime = cal.getTime();
+            }
+
+            Epginfo epg = new Epginfo(baseDate, title, baseDate, startStr, endStr, i);
+            epg.startdateTime = startDateTime;
+            epg.enddateTime = endDateTime;
+            epg.originStart = startStr;
+            epg.originEnd = endStr;
+            list.add(epg);
+        }
+        list.sort((a, b) -> {
+            if (a.startdateTime == null && b.startdateTime == null) return 0;
+            if (a.startdateTime == null) return 1;
+            if (b.startdateTime == null) return -1;
+            return a.startdateTime.compareTo(b.startdateTime);
+        });
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+    return list;
 }
