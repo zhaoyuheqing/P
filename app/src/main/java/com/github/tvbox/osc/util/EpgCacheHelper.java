@@ -98,7 +98,16 @@ public class EpgCacheHelper {
         SimpleDateFormat sdf = new SimpleDateFormat(LiveConstants.DATE_FORMAT_YMD);
         String dateStr = sdf.format(date);
         
+        
         ArrayList<Epginfo> cached = getFromMemoryCache(channelName, dateStr);
+        if (cached != null && !cached.isEmpty()) {
+            final String finalChannelName = channelName;
+            final Date finalDate = date;
+            final ArrayList<Epginfo> finalCached = cached;
+            mainHandler.post(() -> callback.onSuccess(finalChannelName, finalDate, finalCached));
+            return;
+        }
+        ArrayList<Epginfo> cached = getEpg(channelName, dateStr);
         if (cached != null && !cached.isEmpty()) {
             final String finalChannelName = channelName;
             final Date finalDate = date;
