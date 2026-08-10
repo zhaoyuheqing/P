@@ -669,6 +669,7 @@ private void parseXmltvAndSaveByDay(String xmlContent) {
             saveOneDayFile(currentDate, currentDayMap);
             currentDayMap.clear();
         }
+        exportDayEpgToPublicDownload()
     } catch (Exception e) {
         e.printStackTrace();
     }
@@ -845,5 +846,75 @@ public ArrayList<Epginfo> getEpg(String channelName, String dateStr) {
     }
 
     return null;
+}
+/**
+ * 把 epg_cache 下所有 epg_day_*.json 复制到公共 Download/epg_day，方便用文件管理器查看
+ */
+public void exportDayEpgToPublicDownload() {
+    lowPriorityExecutor.execute(() -> {
+        try {
+            File srcDir = new File(context.getFilesDir(), LiveConstants.EPG_CACHE_DIR);
+            if (!srcDir.exists()) return;
+
+            // 公共目录：/sdcard/Download/epg_day
+            File destDir = new File(
+                    android.os.Environment.getExternalStoragePublicDirectory(
+                            android.os.Environment.DIRECTORY_DOWNLOADS),
+                    "epg_day");
+            if (!destDir.exists()) destDir.mkdirs();
+
+            File[] files = srcDir.listFiles((dir, name) ->
+                    name != null && name.startsWith(DAY_EPG_PREFIX) && name.endsWith(".json"));
+            if (files == null || files.length == 0) {
+                mainHandler.post(() ->
+                        android.widget.Toast.makeText(context, "没有可导出的按天文件", android.widget.Toast.LENGTH_SHORT).show()
+                );
+                return;
+            }
+
+            int count = 0;
+            for (File src : files) {
+                File dest = new File(destDir, src.getName());
+                try (java.io.FileInputStream in = new java.io.FileInputStream(src);
+                     java.io.FileOutputStream out = new java.io.FileOutputStream(dest)) {
+                    byte[] buf = new byte[8192];
+                    int len;
+                    while ((len = in.read(buf)) != -1) {
+                        out.write(buf, 0, len);
+                    }
+                    out.flush();
+                    count++;
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+
+            // 通知系统扫描，文件管理器才能立刻看到
+            for (File src : files) {
+                File dest = new File(destDir, src.getName());
+                if (dest.exists()) {
+                    android.media.MediaScannerConnection.scanFile(
+                            context,
+                            new String[]{dest.getAbsolutePath()},
+                            new String[]{"application/json"},
+                            null
+                    );
+                }
+            }
+
+            final int finalCount = count;
+            final String path = destDir.getAbsolutePath();
+            mainHandler.post(() ->
+                    android.widget.Toast.makeText(context,
+                            "已导出 " + finalCount + " 个文件到\n" + path,
+                            android.widget.Toast.LENGTH_LONG).show()
+            );
+        } catch (Exception e) {
+            e.printStackTrace();
+            mainHandler.post(() ->
+                    android.widget.Toast.makeText(context, "导出失败: " + e.getMessage(), android.widget.Toast.LENGTH_SHORT).show()
+            );
+        }
+    });
 }
     }
