@@ -86,10 +86,10 @@ public class EpgCacheHelper {
         ArrayList<Epginfo> cached = getFromMemoryCache(channelName, dateStr);
         if (cached != null && !cached.isEmpty()) return cached;
         //cached = getFromFileCache(channelName, dateStr);
-        //if (cached != null && !cached.isEmpty()) {
+        /*if (cached != null && !cached.isEmpty()) {
             putToMemoryCache(channelName, dateStr, cached);
             return cached;
-        }
+        }*/
         return null;
     }
     
@@ -107,24 +107,24 @@ public class EpgCacheHelper {
             mainHandler.post(() -> callback.onSuccess(finalChannelName, finalDate, finalCached));
             return;
         }
-        //cached = getEpg(channelName, dateStr);
-        //if (cached != null && !cached.isEmpty()) {
+        /*cached = getEpg(channelName, dateStr);
+        if (cached != null && !cached.isEmpty()) {
             final String finalChannelName = channelName;
             final Date finalDate = date;
             final ArrayList<Epginfo> finalCached = cached;
             mainHandler.post(() -> callback.onSuccess(finalChannelName, finalDate, finalCached));
             return;
-        }
+        }*/
         
-        //cached = getFromFileCache(channelName, dateStr);
-        //if (cached != null && !cached.isEmpty()) {
+        /*cached = getFromFileCache(channelName, dateStr);
+        if (cached != null && !cached.isEmpty()) {
             putToMemoryCache(channelName, dateStr, cached);
             final String finalChannelName = channelName;
             final Date finalDate = date;
             final ArrayList<Epginfo> finalCached = cached;
             mainHandler.post(() -> callback.onSuccess(finalChannelName, finalDate, finalCached));
             return;
-        }
+        }*/
         
         final long requestId = isCurrentChannel ? currentChannelRequestId.incrementAndGet() : 0;
         final String reqChannelName = channelName;
@@ -345,7 +345,7 @@ public void cleanExpiredCache() {
     private void saveToFileCache(String channelName, String date, ArrayList<Epginfo> newEpgList, String logoUrl) {
         if (newEpgList == null || newEpgList.isEmpty()) return;
         putToMemoryCache(channelName, date, newEpgList);
-        //lowPriorityExecutor.execute(() -> {
+        /*lowPriorityExecutor.execute(() -> {
             try {
                 ArrayList<Epginfo> existingList = getFromFileCache(channelName, date);
                 Map<String, Epginfo> mergedMap = new LinkedHashMap<>();
@@ -387,7 +387,7 @@ public void cleanExpiredCache() {
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        });
+        });*/
     }
     
     private OkHttpClient getHttpClient() {
