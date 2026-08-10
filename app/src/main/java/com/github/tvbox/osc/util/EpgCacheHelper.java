@@ -569,10 +569,18 @@ private String downloadContent(String url) {
  * 2. programme 取 start/stop/channel + title
  * 3. 按天聚合，跨天则写文件并释放内存
  */
+/** 单次全量解析最多写入的按天文件数 */
+private static final int MAX_DAY_FILES_PER_BUILD = 15;
+
+/**
+ * XmlPullParser：全程在内存按「日期 → 频道 → 节目」聚合，
+ * 全部解析结束后每个日期只写一次文件。
+ * 写入次数超过 MAX_DAY_FILES_PER_BUILD 则停止并 Toast 报错。
+ */
 private void parseXmltvAndSaveByDay(String xmlContent) {
+    // dateStr -> (channelName -> programmes)
+    Map<String, Map<String, JSONArray>> allDays = new LinkedHashMap<>();
     Map<String, String> channelIdToName = new HashMap<>();
-    Map<String, JSONArray> currentDayMap = new LinkedHashMap<>();
-    String currentDate = null;
 
     try {
         XmlPullParser parser = Xml.newPullParser();
@@ -621,7 +629,9 @@ private void parseXmltvAndSaveByDay(String xmlContent) {
                         if (progStart != null && progStart.length() >= 12 && progChannelId != null) {
                             String digits = extractDigits(progStart);
                             if (digits.length() >= 12) {
-                                String dateStr = digits.substring(0, 4) + "-" + digits.substring(4, 6) + "-" + digits.substring(6, 8);
+                                String dateStr = digits.substring(0, 4) + "-"
+                                        + digits.substring(4, 6) + "-"
+                                        + digits.substring(6, 8);
                                 String start = digits.substring(8, 10) + ":" + digits.substring(10, 12);
                                 String end = "23:59";
                                 if (progStop != null) {
@@ -637,16 +647,15 @@ private void parseXmltvAndSaveByDay(String xmlContent) {
                                 String title = (progTitle == null || progTitle.isEmpty())
                                         ? LiveConstants.NO_PROGRAM : progTitle;
 
-                                if (currentDate != null && !currentDate.equals(dateStr)) {
-                                    saveOneDayFile(currentDate, currentDayMap);
-                                    currentDayMap.clear();
+                                Map<String, JSONArray> dayMap = allDays.get(dateStr);
+                                if (dayMap == null) {
+                                    dayMap = new LinkedHashMap<>();
+                                    allDays.put(dateStr, dayMap);
                                 }
-                                currentDate = dateStr;
-
-                                JSONArray list = currentDayMap.get(channelName);
+                                JSONArray list = dayMap.get(channelName);
                                 if (list == null) {
                                     list = new JSONArray();
-                                    currentDayMap.put(channelName, list);
+                                    dayMap.put(channelName, list);
                                 }
                                 JSONObject item = new JSONObject();
                                 item.put("start", start);
@@ -665,16 +674,70 @@ private void parseXmltvAndSaveByDay(String xmlContent) {
             eventType = parser.next();
         }
 
-        if (currentDate != null && !currentDayMap.isEmpty()) {
-            saveOneDayFile(currentDate, currentDayMap);
-            currentDayMap.clear();
+        // ---------- 全部解析结束：每个日期只写一次 ----------
+        if (allDays.isEmpty()) {
+            mainHandler.post(() ->
+                    android.widget.Toast.makeText(context, "节目单解析结果为空", android.widget.Toast.LENGTH_SHORT).show()
+            );
+            return;
         }
-        exportDayEpgToPublicDownload();
+
+        
+        int written = 0;
+        for (Map.Entry<String, Map<String, JSONArray>> entry : allDays.entrySet()) {
+            if (written >= MAX_DAY_FILES_PER_BUILD) {
+                mainHandler.post(() ->
+                        android.widget.Toast.makeText(context,
+                                "写入次数超出上限（最多" + MAX_DAY_FILES_PER_BUILD + "次），已停止",
+                                android.widget.Toast.LENGTH_LONG).show()
+                );
+                break;
+            }
+            saveOneDayFileOnce(entry.getKey(), entry.getValue());
+            written++;
+        }
+
+        // 可选：写完再导出到 App 外部目录
+        if (written > 0) {
+            exportDayEpgToPublicDownload();
+        }
+
+    } catch (Exception e) {
+        e.printStackTrace();
+        mainHandler.post(() ->
+                android.widget.Toast.makeText(context, "节目单解析失败", android.widget.Toast.LENGTH_SHORT).show()
+        );
+    } finally {
+        allDays.clear(); // 尽快释放内存
+    }
+}
+
+/**
+ * 每个日期只调用一次：直接覆盖写入（不再读旧文件合并）
+ */
+private void saveOneDayFileOnce(String dateStr, Map<String, JSONArray> dayMap) {
+    if (dayMap == null || dayMap.isEmpty()) return;
+    try {
+        File dir = new File(context.getFilesDir(), LiveConstants.EPG_CACHE_DIR);
+        if (!dir.exists()) dir.mkdirs();
+
+        File file = new File(dir, DAY_EPG_PREFIX + dateStr + ".json");
+        File temp = new File(dir, DAY_EPG_PREFIX + dateStr + ".json.tmp");
+
+        JSONObject root = new JSONObject();
+        for (Map.Entry<String, JSONArray> e : dayMap.entrySet()) {
+            root.put(e.getKey(), sortJsonArrayByStart(e.getValue()));
+        }
+
+        try (FileWriter writer = new FileWriter(temp)) {
+            writer.write(root.toString());
+        }
+        if (file.exists()) file.delete();
+        temp.renameTo(file);
     } catch (Exception e) {
         e.printStackTrace();
     }
 }
-
 /** 从 XMLTV 时间串中提取数字（兼容 20260809004700 +0800） */
 private String extractDigits(String raw) {
     if (raw == null) return "";
@@ -687,29 +750,6 @@ private String extractDigits(String raw) {
     return sb.toString();
 }
 
-private void saveOneDayFile(String dateStr, Map<String, JSONArray> dayMap) {
-    if (dayMap == null || dayMap.isEmpty()) return;
-    try {
-        File dir = new File(context.getFilesDir(), LiveConstants.EPG_CACHE_DIR);
-        if (!dir.exists()) dir.mkdirs();
-
-        File file = new File(dir, DAY_EPG_PREFIX + dateStr + ".json");
-        File temp = new File(dir, DAY_EPG_PREFIX + dateStr + ".json.tmp");
-
-        JSONObject root = new JSONObject();
-        for (Map.Entry<String, JSONArray> entry : dayMap.entrySet()) {
-            root.put(entry.getKey(), sortJsonArrayByStart(entry.getValue()));
-        }
-
-        try (FileWriter writer = new FileWriter(temp)) {
-            writer.write(root.toString());
-        }
-        if (file.exists()) file.delete();
-        temp.renameTo(file);
-    } catch (Exception e) {
-        e.printStackTrace();
-    }
-}
 
 private JSONArray sortJsonArrayByStart(JSONArray array) {
     if (array == null || array.length() <= 1) return array;
