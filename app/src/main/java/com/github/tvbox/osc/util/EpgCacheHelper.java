@@ -669,7 +669,7 @@ private void parseXmltvAndSaveByDay(String xmlContent) {
             saveOneDayFile(currentDate, currentDayMap);
             currentDayMap.clear();
         }
-        exportDayEpgToPublicDownload()
+        exportDayEpgToPublicDownload();
     } catch (Exception e) {
         e.printStackTrace();
     }
@@ -759,6 +759,9 @@ public ArrayList<Epginfo> getEpgFromDayFile(String channelName, String dateStr) 
                 }
             }
         }
+        mainHandler.post(() ->
+        android.widget.Toast.makeText(context, "第一步匹配到获取本地节目单", android.widget.Toast.LENGTH_SHORT).show()
+);
         if (array == null || array.length() == 0) return null;
         return convertJsonArrayToEpgList(array, dateStr);
     } catch (Exception e) {
@@ -829,6 +832,9 @@ public ArrayList<Epginfo> getEpg(String channelName, String dateStr) {
     cached = getEpgFromDayFile(channelName, dateStr);
     if (cached != null && !cached.isEmpty()) {
         putToMemoryCache(channelName, dateStr, cached);
+        mainHandler.post(() ->
+        android.widget.Toast.makeText(context, "已获取本地节目单", android.widget.Toast.LENGTH_SHORT).show()
+);
         return cached;
     }
 
