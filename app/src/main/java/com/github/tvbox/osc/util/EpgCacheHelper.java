@@ -856,17 +856,25 @@ public ArrayList<Epginfo> getEpg(String channelName, String dateStr) {
 /**
  * 把 epg_cache 下所有 epg_day_*.json 复制到公共 Download/epg_day，方便用文件管理器查看
  */
+/**
+ * 把 epg_cache 下所有 epg_day_*.json
+ * 复制到 App 外部目录：Android/data/<包名>/files/epg_day/
+ * 用文件管理器可进该路径查看（部分系统需在「显示内部存储」里找）
+ */
 public void exportDayEpgToPublicDownload() {
     lowPriorityExecutor.execute(() -> {
         try {
             File srcDir = new File(context.getFilesDir(), LiveConstants.EPG_CACHE_DIR);
             if (!srcDir.exists()) return;
 
-            // 公共目录：/sdcard/Download/epg_day
-            File destDir = new File(
-                    android.os.Environment.getExternalStoragePublicDirectory(
-                            android.os.Environment.DIRECTORY_DOWNLOADS),
-                    "epg_day");
+            // 仅 App 外部目录，无需 WRITE_EXTERNAL_STORAGE
+            File destDir = new File(context.getExternalFilesDir(null), "epg_day");
+            if (destDir == null) {
+                mainHandler.post(() ->
+                        android.widget.Toast.makeText(context, "外部目录不可用", android.widget.Toast.LENGTH_SHORT).show()
+                );
+                return;
+            }
             if (!destDir.exists()) destDir.mkdirs();
 
             File[] files = srcDir.listFiles((dir, name) ->
@@ -892,19 +900,6 @@ public void exportDayEpgToPublicDownload() {
                     count++;
                 } catch (Exception e) {
                     e.printStackTrace();
-                }
-            }
-
-            // 通知系统扫描，文件管理器才能立刻看到
-            for (File src : files) {
-                File dest = new File(destDir, src.getName());
-                if (dest.exists()) {
-                    android.media.MediaScannerConnection.scanFile(
-                            context,
-                            new String[]{dest.getAbsolutePath()},
-                            new String[]{"application/json"},
-                            null
-                    );
                 }
             }
 
