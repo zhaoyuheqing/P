@@ -85,8 +85,8 @@ public class EpgCacheHelper {
     public ArrayList<Epginfo> getCachedEpg(String channelName, String dateStr) {
         ArrayList<Epginfo> cached = getFromMemoryCache(channelName, dateStr);
         if (cached != null && !cached.isEmpty()) return cached;
-        cached = getFromFileCache(channelName, dateStr);
-        if (cached != null && !cached.isEmpty()) {
+        //cached = getFromFileCache(channelName, dateStr);
+        //if (cached != null && !cached.isEmpty()) {
             putToMemoryCache(channelName, dateStr, cached);
             return cached;
         }
@@ -107,8 +107,8 @@ public class EpgCacheHelper {
             mainHandler.post(() -> callback.onSuccess(finalChannelName, finalDate, finalCached));
             return;
         }
-        cached = getEpg(channelName, dateStr);
-        if (cached != null && !cached.isEmpty()) {
+        //cached = getEpg(channelName, dateStr);
+        //if (cached != null && !cached.isEmpty()) {
             final String finalChannelName = channelName;
             final Date finalDate = date;
             final ArrayList<Epginfo> finalCached = cached;
@@ -116,8 +116,8 @@ public class EpgCacheHelper {
             return;
         }
         
-        cached = getFromFileCache(channelName, dateStr);
-        if (cached != null && !cached.isEmpty()) {
+        //cached = getFromFileCache(channelName, dateStr);
+        //if (cached != null && !cached.isEmpty()) {
             putToMemoryCache(channelName, dateStr, cached);
             final String finalChannelName = channelName;
             final Date finalDate = date;
@@ -345,7 +345,7 @@ public void cleanExpiredCache() {
     private void saveToFileCache(String channelName, String date, ArrayList<Epginfo> newEpgList, String logoUrl) {
         if (newEpgList == null || newEpgList.isEmpty()) return;
         putToMemoryCache(channelName, date, newEpgList);
-        lowPriorityExecutor.execute(() -> {
+        //lowPriorityExecutor.execute(() -> {
             try {
                 ArrayList<Epginfo> existingList = getFromFileCache(channelName, date);
                 Map<String, Epginfo> mergedMap = new LinkedHashMap<>();
@@ -799,9 +799,6 @@ public ArrayList<Epginfo> getEpgFromDayFile(String channelName, String dateStr) 
                 }
             }
         }
-        mainHandler.post(() ->
-        android.widget.Toast.makeText(context, "第一步匹配到获取本地节目单", android.widget.Toast.LENGTH_SHORT).show()
-);
         if (array == null || array.length() == 0) return null;
         return convertJsonArrayToEpgList(array, dateStr);
     } catch (Exception e) {
@@ -872,9 +869,6 @@ public ArrayList<Epginfo> getEpg(String channelName, String dateStr) {
     cached = getEpgFromDayFile(channelName, dateStr);
     if (cached != null && !cached.isEmpty()) {
         putToMemoryCache(channelName, dateStr, cached);
-        mainHandler.post(() ->
-        android.widget.Toast.makeText(context, "已获取本地节目单", android.widget.Toast.LENGTH_SHORT).show()
-);
         return cached;
     }
 
