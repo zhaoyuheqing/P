@@ -52,7 +52,7 @@ public class HomeActivity extends BaseActivity {
         loadLiveChannelList();
 
         // 源加载改为异步、不影响开机界面（用户可先看到空列表，后续订阅后刷新）
-        mHandler.post(this::initData);
+        //mHandler.post(this::initData);
     }
 
     // 必须保留：全项目调用 HomeActivity.getRes().getString(R.string.xxx)
