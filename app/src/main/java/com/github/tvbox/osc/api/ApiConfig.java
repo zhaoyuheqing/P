@@ -724,6 +724,9 @@ public void convertHistoryToProxyUrls() {
     
 }
 	public List<String> proxyUrls = new ArrayList<>();
+	public Spider getproxyUrls() {
+        return proxyUrls
+			}
 
     private void putLiveHistory(String url) {
         if (!url.isEmpty()) {
