@@ -707,6 +707,7 @@ public class ApiConfig {
     }
 	// 在 ApiDialog 的某个方法中（如初始化、点击“加载所有源”按钮等）
 public void convertHistoryToProxyUrls() {
+	proxyUrls.clear()
     ArrayList<String> history = Hawk.get(HawkConfig.LIVE_HISTORY, new ArrayList<>());
     for (String url : history) {
         if (url != null && !url.isEmpty()) {
