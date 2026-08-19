@@ -47,6 +47,7 @@ public class HomeActivity extends BaseActivity {
         EventBus.getDefault().register(this);
         ControlManager.get().startServer();
         App.startWebserver();
+        mHandler.post(this::initData);
 
         // 关键修改：不阻塞界面，直接进入直播（符合 DIYP 风格）
         loadLiveChannelList();
@@ -82,9 +83,7 @@ public class HomeActivity extends BaseActivity {
 
     // 核心：开机直接进入直播（不等待源）
     private void loadLiveChannelList() {
-        getSupportFragmentManager().beginTransaction()
-                .replace(R.id.container, GridFragment.newInstance())
-                .commitAllowingStateLoss();
+        startActivity(new Intent(this, SettingActivity.class));
     }
 
     // 简化直播分类占位（空数据，用户后续订阅）
@@ -100,34 +99,14 @@ public class HomeActivity extends BaseActivity {
     private boolean jarInitOk = false;
 
     private void initData() {
-        if (dataInitOk && jarInitOk) {
-            // 源加载完成，可选：通知 GridFragment 刷新
-            return;
-        }
+        ApiConfig.get().ijkCodes();
 
-        ApiConfig.get().loadConfig(false, new ApiConfig.LoadConfigCallback() {
-            @Override
-            public void success() {
-                dataInitOk = true;
-                if (ApiConfig.get().getSpider().isEmpty()) {
-                    jarInitOk = true;
-                }
-                // 源成功后可选刷新直播（但不强制）
-                // mHandler.postDelayed(() -> EventBus.getDefault().post(new RefreshEvent()), 100);
-            }
+        
+        ApiConfig.get().convertHistoryToProxyUrls();
+            
 
-            @Override
-            public void error(String msg) {
-                dataInitOk = true;
-                jarInitOk = true;
-            }
-
-            @Override
-            public void retry() {
-                mHandler.postDelayed(HomeActivity.this::initData, 1000);
-            }
-        }, this);
-    }
+             
+     }
 
     // 菜单键打开设置（DIYP 核心操作）
     @Override
