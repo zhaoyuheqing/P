@@ -632,6 +632,7 @@ public class ApiConfig {
                 }
             }
         }
+		
         // IJK解码配置
         if (ijkCodes == null) {
             ijkCodes = new ArrayList<>();
@@ -665,6 +666,62 @@ public class ApiConfig {
             }
         }
     }
+		public void ijkCodes() {
+			String defaultIJKADS = "{\"ijk\":[{\"options\":[{\"name\":\"opensles\",\"category\":4,\"value\":\"0\"},{\"name\":\"overlay-format\",\"category\":4,\"value\":\"842225234\"},{\"name\":\"framedrop\",\"category\":4,\"value\":\"0\"},{\"name\":\"soundtouch\",\"category\":4,\"value\":\"1\"},{\"name\":\"start-on-prepared\",\"category\":4,\"value\":\"1\"},{\"name\":\"http-detect-rangeupport\",\"category\":1,\"value\":\"0\"},{\"name\":\"fflags\",\"category\":1,\"value\":\"fastseek\"},{\"name\":\"skip_loop_filter\",\"category\":2,\"value\":\"48\"},{\"name\":\"reconnect\",\"category\":4,\"value\":\"1\"},{\"name\":\"enable-accurate-seek\",\"category\":4,\"value\":\"0\"},{\"name\":\"mediacodec\",\"category\":4,\"value\":\"0\"},{\"name\":\"mediacodec-auto-rotate\",\"category\":4,\"value\":\"0\"},{\"name\":\"mediacodec-handle-resolution-change\",\"category\":4,\"value\":\"0\"},{\"name\":\"mediacodec-hevc\",\"category\":4,\"value\":\"0\"},{\"name\":\"dns_cache_timeout\",\"category\":1,\"value\":\"600000000\"}],\"group\":\"软解码\"},{\"options\":[{\"name\":\"opensles\",\"category\":4,\"value\":\"0\"},{\"name\":\"overlay-format\",\"category\":4,\"value\":\"842225234\"},{\"name\":\"framedrop\",\"category\":4,\"value\":\"0\"},{\"name\":\"soundtouch\",\"category\":4,\"value\":\"1\"},{\"name\":\"start-on-prepared\",\"category\":4,\"value\":\"1\"},{\"name\":\"http-detect-rangeupport\",\"category\":1,\"value\":\"0\"},{\"name\":\"fflags\",\"category\":1,\"value\":\"fastseek\"},{\"name\":\"skip_loop_filter\",\"category\":2,\"value\":\"48\"},{\"name\":\"reconnect\",\"category\":4,\"value\":\"1\"},{\"name\":\"enable-accurate-seek\",\"category\":4,\"value\":\"0\"},{\"name\":\"mediacodec\",\"category\":4,\"value\":\"1\"},{\"name\":\"mediacodec-auto-rotate\",\"category\":4,\"value\":\"1\"},{\"name\":\"mediacodec-handle-resolution-change\",\"category\":4,\"value\":\"1\"},{\"name\":\"mediacodec-hevc\",\"category\":4,\"value\":\"1\"},{\"name\":\"dns_cache_timeout\",\"category\":1,\"value\":\"600000000\"}],\"group\":\"硬解码\"}],\"ads\":[\"mimg.0c1q0l.cn\",\"www.googletagmanager.com\",\"www.google-analytics.com\",\"mc.usihnbcq.cn\",\"mg.g1mm3d.cn\",\"mscs.svaeuzh.cn\",\"cnzz.hhttm.top\",\"tp.vinuxhome.com\",\"cnzz.mmstat.com\",\"www.baihuillq.com\",\"s23.cnzz.com\",\"z3.cnzz.com\",\"c.cnzz.com\",\"stj.v1vo.top\",\"z12.cnzz.com\",\"img.mosflower.cn\",\"tips.gamevvip.com\",\"ehwe.yhdtns.com\",\"xdn.cqqc3.com\",\"www.jixunkyy.cn\",\"sp.chemacid.cn\",\"hm.baidu.com\",\"s9.cnzz.com\",\"z6.cnzz.com\",\"um.cavuc.com\",\"mav.mavuz.com\",\"wofwk.aoidf3.com\",\"z5.cnzz.com\",\"xc.hubeijieshikj.cn\",\"tj.tianwenhu.com\",\"xg.gars57.cn\",\"k.jinxiuzhilv.com\",\"cdn.bootcss.com\",\"ppl.xunzhuo123.com\",\"xomk.jiangjunmh.top\",\"img.xunzhuo123.com\",\"z1.cnzz.com\",\"s13.cnzz.com\",\"xg.huataisangao.cn\",\"z7.cnzz.com\",\"xg.huataisangao.cn\",\"z2.cnzz.com\",\"s96.cnzz.com\",\"q11.cnzz.com\",\"thy.dacedsfa.cn\",\"xg.whsbpw.cn\",\"s19.cnzz.com\",\"z8.cnzz.com\",\"s4.cnzz.com\",\"f5w.as12df.top\",\"ae01.alicdn.com\",\"www.92424.cn\",\"k.wudejia.com\",\"vivovip.mmszxc.top\",\"qiu.xixiqiu.com\",\"cdnjs.hnfenxun.com\",\"cms.qdwght.com\"]}";
+            JsonObject defaultJson = new Gson().fromJson(defaultIJKADS, JsonObject.class);
+			if (ijkCodes == null) {
+            ijkCodes = new ArrayList<>();
+            boolean foundOldSelect = false;
+            String ijkCodec = Hawk.get(HawkConfig.IJK_CODEC, "");
+            JsonArray ijkJsonArray = infoJson.has("ijk") ? infoJson.get("ijk").getAsJsonArray() : defaultJson.get("ijk").getAsJsonArray();
+            for (JsonElement opt : ijkJsonArray) {
+                JsonObject obj = (JsonObject) opt;
+                String name = obj.get("group").getAsString();
+                LinkedHashMap<String, String> baseOpt = new LinkedHashMap<>();
+                for (JsonElement cfg : obj.get("options").getAsJsonArray()) {
+                    JsonObject cObj = (JsonObject) cfg;
+                    String key = cObj.get("category").getAsString() + "|" + cObj.get("name").getAsString();
+                    String val = cObj.get("value").getAsString();
+                    baseOpt.put(key, val);
+                }
+                IJKCode codec = new IJKCode();
+                codec.setName(name);
+                codec.setOption(baseOpt);
+                if (name.equals(ijkCodec) || TextUtils.isEmpty(ijkCodec)) {
+                    codec.selected(true);
+                    ijkCodec = name;
+                    foundOldSelect = true;
+                } else {
+                    codec.selected(false);
+                }
+                ijkCodes.add(codec);
+            }
+            if (!foundOldSelect && ijkCodes.size() > 0) {
+                ijkCodes.get(0).selected(true);
+            }
+			}
+		
+								
+
+    }
+	// 在 ApiDialog 的某个方法中（如初始化、点击“加载所有源”按钮等）
+public void convertHistoryToProxyUrls() {
+    ArrayList<String> history = Hawk.get(HawkConfig.LIVE_HISTORY, new ArrayList<>());
+    for (String url : history) {
+        if (url != null && !url.isEmpty()) {
+            try {
+                String base64 = Base64.encodeToString(url.getBytes("UTF-8"),
+                        Base64.DEFAULT | Base64.URL_SAFE | Base64.NO_WRAP);
+                String proxyUrl = "http://127.0.0.1:9978/proxy?do=live&type=txt&ext=" + base64;
+                proxyUrls.add(proxyUrl);
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    
+}
+	public List<String> proxyUrls = new ArrayList<>();
 
     private void putLiveHistory(String url) {
         if (!url.isEmpty()) {
