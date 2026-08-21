@@ -1125,7 +1125,7 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
         });
     }
 
-    private void initLiveChannelList() {
+    public void initLiveChannelList() {
         List<String> proxyUrls = ApiConfig.get().getProxyUrls();
         if (proxyUrls == null || proxyUrls.isEmpty()) {
             Toast.makeText(App.getInstance(), getString(R.string.act_live_play_empty_channel), Toast.LENGTH_SHORT).show();
