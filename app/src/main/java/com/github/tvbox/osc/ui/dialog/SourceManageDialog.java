@@ -156,7 +156,7 @@ public class SourceManageDialog extends BaseDialog {
                 enabledUrls.add(item.get(1));
             }
         }
-        Hawk.put(KEY_ENABLED_URLS, enabledUrls);
+        Hawk.put(HawkConfig.API_HISTORY, enabledUrls);
     }
 
     // 内部适配器
