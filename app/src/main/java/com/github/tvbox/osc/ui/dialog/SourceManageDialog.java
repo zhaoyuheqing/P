@@ -74,10 +74,17 @@ public class SourceManageDialog extends BaseDialog {
 
     private void setupListeners() {
         btnSubmit.setOnClickListener(v -> {
+            
             String url = etUrl.getText().toString().trim();
             if (TextUtils.isEmpty(url)) {
                 Toast.makeText(getContext(), "请输入直播源地址", Toast.LENGTH_SHORT).show();
                 return;
+            }
+            for (int i = 0; i < dataList.size(); i++) {
+    if (dataList.get(i).get(1).equals(url)) {
+        Toast.makeText(getContext(), "该地址已存在", Toast.LENGTH_SHORT).show();
+        return;
+    }
             }
             String name = etName.getText().toString().trim();
             isDataChanged = true;
@@ -111,14 +118,28 @@ public class SourceManageDialog extends BaseDialog {
                 AutoSizeUtils.mm2px(getContext(), 300),
                 AutoSizeUtils.mm2px(getContext(), 300)));
     }
+    public class SourceManageDialog extends BaseDialog {
+    // ... 原有变量 ...
+
+    // 1. 定义刷新接口
+    public interface OnRefreshListener {
+        void onRefresh();
+    }
+
+    // 2. 添加监听器成员变量
+    private OnRefreshListener refreshListener;
+
+    // 3. 添加 setter 方法，供外部传入
+    public void setOnRefreshListener(OnRefreshListener listener) {
+        this.refreshListener = listener;
+    }
 
     @Override
     public void dismiss() {
         saveData();
         if (isDataChanged) {
                 ApiConfig.get().convertHistoryToProxyUrls();
-            EventBus.getDefault().post(new RefreshEvent(RefreshEvent.TYPE_LIVE_SOURCE_CHANGED));
-            
+            refreshListener.onRefresh();
         }
         super.dismiss();
     }
