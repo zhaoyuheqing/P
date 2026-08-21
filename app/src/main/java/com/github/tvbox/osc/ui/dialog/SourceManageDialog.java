@@ -31,7 +31,7 @@ public class SourceManageDialog extends BaseDialog {
     private RecyclerView listView;
     private EditText etName, etUrl;
     private TextView btnSubmit;
-    private boolean Submit
+    private boolean isDataChanged = false;
 
     private List<List<String>> dataList = new ArrayList<>();
     private SourceAdapter adapter;
@@ -80,7 +80,7 @@ public class SourceManageDialog extends BaseDialog {
                 return;
             }
             String name = etName.getText().toString().trim();
-            boolean Submit = true
+            isDataChanged = true;
 
             if (editingPosition == -1) {
                 // 新增
@@ -115,9 +115,10 @@ public class SourceManageDialog extends BaseDialog {
     @Override
     public void dismiss() {
         saveData();
-        if (Submit) {
+        if (isDataChanged) {
                 ApiConfig.get().convertHistoryToProxyUrls();
-            LivePlayActivity.get().initLiveChannelList);
+            EventBus.getDefault().post(new RefreshEvent(RefreshEvent.TYPE_LIVE_SOURCE_CHANGED));
+            
         }
         super.dismiss();
     }
@@ -172,14 +173,13 @@ public class SourceManageDialog extends BaseDialog {
             // 点击切换启用状态
             holder.tvName.setOnClickListener(v -> {
                 boolean newEnabled = !enabled;
-                boolean Submit = true
+                isDataChanged = true;
                 item.set(2, newEnabled ? "true" : "false");
                 notifyItemChanged(position);
             });
 
             // 长按进入编辑模式
             holder.itemView.setOnLongClickListener(v -> {
-                boolean Submit = true
                 editingPosition = position;
                 etName.setText(name);
                 etUrl.setText(url);
@@ -188,6 +188,7 @@ public class SourceManageDialog extends BaseDialog {
 
             // 删除按钮
             holder.tvDel.setOnClickListener(v -> {
+                isDataChanged = true;
                 items.remove(position);
                 notifyItemRemoved(position);
                 if (editingPosition == position) {
