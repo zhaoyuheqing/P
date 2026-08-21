@@ -500,7 +500,7 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
                 }
             }
 
-            @Override public void SourceManage()(Activity Activity) {
+            @Override public void SourceManage(Activity Activity) {
             SourceManageDialog dialog = new SourceManageDialog(activity);
                     // 设置监听器，刷新直播源
                     dialog.setOnRefreshListener(new SourceManageDialog.OnRefreshListener() {
