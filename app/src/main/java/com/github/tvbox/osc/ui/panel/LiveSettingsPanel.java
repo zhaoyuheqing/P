@@ -256,8 +256,11 @@ public class LiveSettingsPanel {
                 if (position == 0) listener.onLiveAddressSelected();
                 break;    
             case 6:
-                if (position == 0) listener.SourceManage();
-                if (position == 1) listener.epgManage();
+                Context ctx = contextRef.get();
+                if (ctx instanceof LivePlayActivity) {
+                    LivePlayActivity activity = (LivePlayActivity) ctx;
+                if (position == 0) listener.SourceManage(activity);
+                if (position == 1) listener.epgManage(activity);
                 break;
             case 7:
                 if (position == 0) listener.onExit();
