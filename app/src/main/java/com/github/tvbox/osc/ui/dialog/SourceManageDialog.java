@@ -23,7 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import me.jessyan.autosize.utils.AutoSizeUtils;
-import com.github.tvbox.osc.api.ApiConfig
+import com.github.tvbox.osc.api.ApiConfig;
 
 public class SourceManageDialog extends BaseDialog {
 
