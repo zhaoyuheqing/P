@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/shape_dialog_bg_main"
+        android:orientation="vertical"
+        android:padding="@dimen/vs_30">
+
+        <!-- 上半部分：水平左列和右列 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <!-- 左列：地址 + 二维码 -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:orientation="vertical"
+                android:paddingEnd="@dimen/vs_20">
+
+                <TextView
+                    android:id="@+id/tvAddress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/vs_10"
+                    android:gravity="center"
+                    android:lineSpacingMultiplier="1"
+                    android:shadowColor="@color/color_000000_60"
+                    android:shadowDx="0"
+                    android:shadowDy="0"
+                    android:shadowRadius="5"
+                    android:textColor="@color/color_FFFFFF"
+                    android:textSize="@dimen/ts_24"
+                    android:textStyle="bold"
+                    tools:text="192.168.1.100:9978" />
+
+                <ImageView
+                    android:id="@+id/ivQRCode"
+                    android:layout_width="@dimen/vs_300"
+                    android:layout_height="@dimen/vs_300"
+                    android:layout_gravity="center"
+                    android:focusable="false"
+                    android:src="@drawable/ic_qr_placeholder" />
+            </LinearLayout>
+
+            <!-- 右列：标题 + 列表 -->
+            <LinearLayout
+                android:layout_width="@dimen/vs_640"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/vs_20"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:padding="@dimen/vs_10"
+                    android:shadowColor="@color/color_FF000000"
+                    android:shadowDx="0"
+                    android:shadowDy="0"
+                    android:shadowRadius="5"
+                    android:text="直播源管理"
+                    android:textColor="@color/color_FFFFFF"
+                    android:textSize="@dimen/ts_26"
+                    android:textStyle="bold"
+                    android:gravity="center" />
+
+                <com.owen.tvrecyclerview.widget.TvRecyclerView
+                    android:id="@+id/list"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/vs_300"
+                    android:paddingLeft="@dimen/vs_10"
+                    android:paddingRight="@dimen/vs_10"
+                    android:clipToPadding="false"
+                    android:clipChildren="false"
+                    app:tv_layoutManager="V7LinearLayoutManager"
+                    app:tv_selectedItemIsCentered="true"
+                    app:tv_verticalSpacingWithMargins="@dimen/vs_10" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 底部输入行 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="@dimen/vs_10"
+            android:paddingTop="@dimen/vs_10"
+            android:paddingBottom="@dimen/vs_5">
+
+            <EditText
+                android:id="@+id/etName"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/input_dialog_api_input"
+                android:hint="名称（可选）"
+                android:inputType="text"
+                android:maxLines="1"
+                android:padding="@dimen/vs_10"
+                android:textColor="@color/color_FFFFFF"
+                android:textColorHint="@color/color_FFFFFF_50"
+                android:textSize="@dimen/ts_22" />
+
+            <EditText
+                android:id="@+id/etUrl"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="2"
+                android:layout_marginStart="@dimen/vs_5"
+                android:background="@drawable/input_dialog_api_input"
+                android:hint="直播源地址"
+                android:inputType="text"
+                android:maxLines="1"
+                android:padding="@dimen/vs_10"
+                android:textColor="@color/color_FFFFFF"
+                android:textColorHint="@color/color_FFFFFF_50"
+                android:textSize="@dimen/ts_22" />
+
+            <TextView
+                android:id="@+id/btnSubmit"
+                android:layout_width="@dimen/vs_80"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginStart="@dimen/vs_5"
+                android:background="@drawable/button_dialog_main"
+                android:focusable="true"
+                android:gravity="center"
+                android:padding="@dimen/vs_10"
+                android:text="确定"
+                android:textColor="@color/color_FFFFFF"
+                android:textSize="@dimen/ts_22" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>
