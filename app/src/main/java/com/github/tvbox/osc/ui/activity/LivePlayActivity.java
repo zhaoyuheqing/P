@@ -497,6 +497,29 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
                     Toast.makeText(LivePlayActivity.this, "设置失败", Toast.LENGTH_SHORT).show();
                 }
             }
+
+            @Override public void SourceManage()(Activity Activity) {
+            SourceManageDialog dialog = new SourceManageDialog(activity);
+                    // 设置监听器，刷新直播源
+                    dialog.setOnRefreshListener(new SourceManageDialog.OnRefreshListener() {
+                        @Override
+                        public void onRefresh() {
+                            activity.initLiveChannelList();
+                        }
+                    });
+                    dialog.show();
+            }
+            @Override public void epgManage(Activity Activity) {
+                SourceManageDialog dialog = new SourceManageDialog(activity);
+                    // 设置监听器，刷新直播源
+                    dialog.setOnRefreshListener(new SourceManageDialog.OnRefreshListener() {
+                        @Override
+                        public void onRefresh() {
+                            activity.initLiveChannelList();
+                        }
+                    });
+                    dialog.show();
+            }
             @Override public void onTimeoutChanged(int timeoutIndex) {
                 Hawk.put(HawkConfig.LIVE_CONNECT_TIMEOUT, timeoutIndex);
             }
