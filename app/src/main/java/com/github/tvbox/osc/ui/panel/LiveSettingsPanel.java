@@ -36,6 +36,8 @@ public class LiveSettingsPanel {
         void onPlayerTypeChanged(int typeIndex);
         void onTimeoutChanged(int timeoutIndex);
         void onPreferenceChanged(String key, boolean value);
+        void SourceManage(Activity Activity);
+        void epgManage(Activity Activity);
         void onLiveAddressSelected();
         void onExit();
         int getCurrentPlayerType();
@@ -82,7 +84,7 @@ public class LiveSettingsPanel {
 
     private void initSettingGroups() {
         ArrayList<String> groupNames = new ArrayList<>(Arrays.asList(
-                "线路选择", "画面比例", "播放解码", "超时换源", "偏好设置", "直播地址", "退出直播"
+                "线路选择", "画面比例", "播放解码", "超时换源", "偏好设置", "订阅管理","直播地址", "退出直播"
         ));
         ArrayList<ArrayList<String>> itemsArrayList = new ArrayList<>();
         itemsArrayList.add(new ArrayList<>());
@@ -91,6 +93,7 @@ public class LiveSettingsPanel {
         itemsArrayList.add(new ArrayList<>(Arrays.asList("关", "5s", "10s", "15s", "20s", "25s", "30s")));
         // 偏好设置：显示时间、显示网速、换台反转、跨选分类、关闭密码、时移后继续下一段
         itemsArrayList.add(new ArrayList<>(Arrays.asList("显示时间", "显示网速", "换台反转", "跨选分类", "关闭密码", "时移后继续下一段", "记忆解码", "记忆进度")));
+        itemsArrayList.add(new ArrayList<>(Arrays.asList("直播订阅", "EPG订阅")));
         itemsArrayList.add(new ArrayList<>(Arrays.asList("列表历史")));
         itemsArrayList.add(new ArrayList<>(Arrays.asList("确定退出")));
 
@@ -251,8 +254,12 @@ public class LiveSettingsPanel {
                 break;
             case 5:
                 if (position == 0) listener.onLiveAddressSelected();
-                break;
+                break;    
             case 6:
+                if (position == 0) listener.SourceManage();
+                if (position == 1) listener.epgManage();
+                break;
+            case 7:
                 if (position == 0) listener.onExit();
                 break;
         }
