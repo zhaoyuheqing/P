@@ -1101,24 +1101,18 @@ public void onShiyiAutoNext(String epgInfo, int position, Date date) {
     }
 
     private void initLiveChannelList() {
-        List<LiveChannelGroup> list = ApiConfig.get().getChannelGroupList();
-        if (list.isEmpty()) {
+        List<String> proxyUrls = ApiConfig.get().getProxyUrls();
+        if (proxyUrls == null || proxyUrls.isEmpty()) {
             Toast.makeText(App.getInstance(), getString(R.string.act_live_play_empty_channel), Toast.LENGTH_SHORT).show();
             liveChannelGroupList.clear();
             showSuccess();
             initLiveState();
             return;
         }
-        if (list.size() == 1 && list.get(0).getGroupName().startsWith("http://127.0.0.1")) {
-            loadProxyLives(list.get(0).getGroupName());
-        } else {
-            liveChannelGroupList.clear();
-            liveChannelGroupList.addAll(list);
-            showSuccess();
-            initLiveState();
+        for (String proxyUrl : proxyUrls) {
+            loadProxyLives(proxyUrl);
         }
     }
-
     public void loadProxyLives(String url) {
         try {
             Uri parsedUrl = Uri.parse(url);
