@@ -31,6 +31,7 @@ public class SourceManageDialog extends BaseDialog {
     private RecyclerView listView;
     private EditText etName, etUrl;
     private TextView btnSubmit;
+    private boolean Submit
 
     private List<List<String>> dataList = new ArrayList<>();
     private SourceAdapter adapter;
@@ -79,6 +80,7 @@ public class SourceManageDialog extends BaseDialog {
                 return;
             }
             String name = etName.getText().toString().trim();
+            boolean Submit = true
 
             if (editingPosition == -1) {
                 // 新增
@@ -113,6 +115,10 @@ public class SourceManageDialog extends BaseDialog {
     @Override
     public void dismiss() {
         saveData();
+        if (Submit) {
+                ApiConfig.get().convertHistoryToProxyUrls();
+            LivePlayActivity.get().initLiveChannelList);
+        }
         super.dismiss();
     }
 
@@ -166,12 +172,14 @@ public class SourceManageDialog extends BaseDialog {
             // 点击切换启用状态
             holder.tvName.setOnClickListener(v -> {
                 boolean newEnabled = !enabled;
+                boolean Submit = true
                 item.set(2, newEnabled ? "true" : "false");
                 notifyItemChanged(position);
             });
 
             // 长按进入编辑模式
             holder.itemView.setOnLongClickListener(v -> {
+                boolean Submit = true
                 editingPosition = position;
                 etName.setText(name);
                 etUrl.setText(url);
