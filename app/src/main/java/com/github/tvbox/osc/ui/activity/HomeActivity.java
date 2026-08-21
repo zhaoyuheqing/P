@@ -83,7 +83,7 @@ public class HomeActivity extends BaseActivity {
 
     // 核心：开机直接进入直播（不等待源）
     private void loadLiveChannelList() {
-        startActivity(new Intent(this, SettingActivity.class));
+        startActivity(new Intent(this, LivePlayActivity.class));
     }
 
     // 简化直播分类占位（空数据，用户后续订阅）
