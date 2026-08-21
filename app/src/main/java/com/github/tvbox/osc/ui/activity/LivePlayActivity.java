@@ -39,6 +39,8 @@ import com.github.tvbox.osc.constant.LiveConstants;
 import com.github.tvbox.osc.event.RefreshEvent;
 import com.github.tvbox.osc.player.controller.LivePlaybackManager;
 import com.github.tvbox.osc.ui.adapter.ApiHistoryDialogAdapter;
+import com.github.tvbox.osc.ui.dialog.SourceManageDialog;
+import com.github.tvbox.osc.ui.dialog.ApiHistoryDialog;    
 import com.github.tvbox.osc.ui.adapter.LiveEpgAdapter;
 import com.github.tvbox.osc.ui.adapter.LiveEpgDateAdapter;
 import com.github.tvbox.osc.ui.dialog.ApiHistoryDialog;
