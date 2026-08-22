@@ -34,7 +34,7 @@ jobs:
             --parallel \
             --configure-on-demand \
             --max-workers=4 \
-            --stacktrace \
+            --stacktrace > compile_log.txt 2>&1
                   # 打印所有生成的 APK 文件路径（用于确认位置）
       - name: Print all generated APK locations
         if: always()
